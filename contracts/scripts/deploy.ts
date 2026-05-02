@@ -6,8 +6,9 @@ import * as path from "path";
  * Deploy Script for Sovereign Agent Keys
  * 
  * Deploys:
- *   1. MockZKVerifier  — placeholder verifier (accepts any non-empty proof)
- *   2. AgentRegistry   — the core registry, linked to the verifier
+ *   1. Verifier        — real Groth16 verifier (exported from snarkjs/circom)
+ *   2. MockZKVerifier  — placeholder verifier (accepts any non-empty proof)
+ *   3. AgentRegistry   — the core registry, linked to the real verifier
  *
  * Usage:
  *   Local:   npx hardhat run scripts/deploy.ts
@@ -25,25 +26,34 @@ async function main() {
   console.log(`Deployer balance : ${ethers.formatEther(balance)} 0G`);
   console.log("----------------------------------------------------------\n");
 
-  // ── Step 1: Deploy MockZKVerifier ─────────────────────────────
+  // ── Step 1: Deploy Real ZK Verifier (Groth16 from snarkjs) ────
+  console.log("📦 Deploying Verifier (Groth16)...");
+  const Verifier = await ethers.getContractFactory("Verifier");
+  const realVerifier = await Verifier.deploy();
+  await realVerifier.waitForDeployment();
+  const realVerifierAddress = await realVerifier.getAddress();
+  console.log(`✅ Verifier (Real) deployed at: ${realVerifierAddress}\n`);
+
+  // ── Step 2: Deploy MockZKVerifier (Legacy support) ────────────
   console.log("📦 Deploying MockZKVerifier...");
   const MockZKVerifier = await ethers.getContractFactory("MockZKVerifier");
-  const verifier = await MockZKVerifier.deploy();
-  await verifier.waitForDeployment();
-  const verifierAddress = await verifier.getAddress();
-  console.log(`✅ MockZKVerifier deployed at: ${verifierAddress}\n`);
+  const mockVerifier = await MockZKVerifier.deploy();
+  await mockVerifier.waitForDeployment();
+  const mockVerifierAddress = await mockVerifier.getAddress();
+  console.log(`✅ MockZKVerifier deployed at: ${mockVerifierAddress}\n`);
 
-  // ── Step 2: Deploy AgentRegistry ──────────────────────────────
+  // ── Step 3: Deploy AgentRegistry (linked to Real Verifier) ────
   console.log("📦 Deploying AgentRegistry...");
   const AgentRegistry = await ethers.getContractFactory("AgentRegistry");
-  const registry = await AgentRegistry.deploy(verifierAddress);
+  const registry = await AgentRegistry.deploy(realVerifierAddress);
   await registry.waitForDeployment();
   const registryAddress = await registry.getAddress();
   console.log(`✅ AgentRegistry deployed at : ${registryAddress}\n`);
 
-  // ── Step 3: Save addresses for ai-orchestrator and mission-control
+  // ── Step 4: Save addresses for ai-orchestrator and mission-control
   const addresses = {
-    MockZKVerifier: verifierAddress,
+    Verifier: realVerifierAddress,
+    MockZKVerifier: mockVerifierAddress,
     AgentRegistry: registryAddress,
   };
 
@@ -55,10 +65,11 @@ async function main() {
   console.log("==========================================================");
   console.log("🎉 DEPLOYMENT COMPLETE — save these addresses!");
   console.log("==========================================================");
-  console.log(`MockZKVerifier : ${verifierAddress}`);
+  console.log(`Verifier       : ${realVerifierAddress}`);
+  console.log(`MockZKVerifier : ${mockVerifierAddress}`);
   console.log(`AgentRegistry  : ${registryAddress}`);
   console.log(`\n🔗 View on 0G Explorer:`);
-  console.log(`   https://chainscan-galileo.0g.ai/address/${verifierAddress}`);
+  console.log(`   https://chainscan-galileo.0g.ai/address/${realVerifierAddress}`);
   console.log(`   https://chainscan-galileo.0g.ai/address/${registryAddress}`);
   console.log("==========================================================");
 }

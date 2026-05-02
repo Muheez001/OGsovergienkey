@@ -4,6 +4,9 @@ import * as fs from "fs";
 import * as path from "path";
 import { execSync } from "child_process";
 import * as dotenv from "dotenv";
+import { generateProof } from "./prover";
+const sss = require('shamirs-secret-sharing');
+
 
 dotenv.config();
 
@@ -35,9 +38,21 @@ class SovereignAgent {
     async spawn(name: string) {
         console.log(`\n>> [GENESIS] Spawning agent: ${name}`);
         
-        // 1. Simulate MPC DKG and shard generation
-        const mockShardData = `enc_v1_sak_${Math.random().toString(36).substring(7)}`;
+        // 1. Real MPC simulation: generate ephemeral keypair and split with Shamir 2-of-3
+        const ephemeralWallet = ethers.Wallet.createRandom();
+        const secretBytes = Buffer.from(ephemeralWallet.privateKey.slice(2), 'hex');
+        const shares = sss.split(secretBytes, { shares: 3, threshold: 2 });
+        // Store shard 1 on 0G Storage (other shards go to MPC nodes in production)
+        const mockShardData = JSON.stringify({
+          shardIndex: 1,
+          totalShards: 3,
+          threshold: 2,
+          shardHex: shares[0].toString('hex'),
+          agentPubKey: ephemeralWallet.publicKey,
+          timestamp: Date.now()
+        });
         const shardId = `shard-${name.toLowerCase()}-001`;
+        const agentPubKeyHex = ethers.id(ephemeralWallet.publicKey) as `0x${string}`;
         
         // 2. Upload to 0G Storage (Resilient to 503 errors)
         let shardRootHash = "0x-offline";
@@ -49,8 +64,12 @@ class SovereignAgent {
         
         // 3. Register on 0G Chain (Requires RPC to be up)
         console.log(`[Flow] Registering agent on-chain at ${ADDRESSES.AgentRegistry}...`);
-        const pubKey = `sak_pub_${Math.random().toString(36).substring(7)}`; // Mock aggregate pubkey
-        const tx = await this.registry.registerAgent(pubKey, shardRootHash);
+        const pubKey = agentPubKeyHex; // Real ephemeral agent public key hash
+        // Convert constitutionHash string to bytes32
+        const constitutionHashBytes32 = shardRootHash.startsWith('0x')
+          ? shardRootHash.padEnd(66, '0').slice(0, 66)
+          : ('0x' + shardRootHash).padEnd(66, '0').slice(0, 66);
+        const tx = await this.registry.registerAgent(pubKey, constitutionHashBytes32);
         const receipt = await this.waitForReceipt(tx);
         
         // Extract agentId from event
@@ -93,36 +112,17 @@ class SovereignAgent {
             }
         };
 
-        // 2. Write inputs for ZK Engine
-        const zkInputWinDir = path.join(__dirname, "../../zk-engine/script");
-        const zkInputLinuxDir = `/mnt/c/Users/PR1M3/Desktop/SAK-Phase2/zk-engine/script`;
-        fs.writeFileSync(path.join(zkInputWinDir, "zk_input.json"), JSON.stringify(context, null, 2));
-        console.log(`[ZK] Inputs prepared for SP1 Prover.`);
-
-        // 3. Trigger ZK Prover via WSL (avoids NTFS rebuild glitches)
-        // SP1_PROVER is read from .env — set to 'network' to offload to Succinct's remote prover
-        // (avoids WSL OOM SIGKILL on local CPU mode). Set to 'cpu' to run locally.
-        const sp1Prover = process.env.SP1_PROVER || "network";
-        const sp1PrivateKey = process.env.SP1_PRIVATE_KEY ? `export SP1_PRIVATE_KEY=${process.env.SP1_PRIVATE_KEY} && ` : "";
-        console.log(`[ZK] Starting SP1 Prover in WSL (mode: ${sp1Prover})...`);
-        console.log(`[ZK] Compiling Prover... (This may take ~10min on first run)`);
+        // 2. Generate ZK Proof via snarkjs
         const provingStart = Date.now();
-        try {
-            execSync(
-                `wsl bash -l -c "${sp1PrivateKey}export SP1_PROVER=${sp1Prover} && export PATH=/home/prime/.cargo/bin:/home/prime/.sp1/bin:\\$PATH && cd '${zkInputLinuxDir}' && cargo run --release"`,
-                { timeout: 2700000, stdio: "inherit" }  // 45-minute timeout
-            );
-        } catch (err) {
-            console.error("ZK Proving failed. The intent might violate the constitution.");
-            throw err;
-        }
+        const { pubInputs, proofBytes } = await generateProof(
+            amount, 
+            targetAddress, 
+            1000, 
+            targetAddress
+        );
         const provingDuration = ((Date.now() - provingStart) / 1000).toFixed(1);
-        console.log(`[PROVING] 🛡️ STARK Proof Successfully Generated in ${provingDuration}s.`);
+        console.log(`[PROVING] 🛡️ Groth16 Proof Successfully Generated in ${provingDuration}s.`);
         console.log(`PROVING_DURATION: ${provingDuration}s`);
-
-        // 4. Load ZK Proof Output
-        const zkOutput = JSON.parse(fs.readFileSync(path.join(zkInputWinDir, "zk_output.json"), "utf8"));
-        console.log(`✅ ZK Proof generated and verified locally.`);
 
         // 5. Log raw intent to 0G DA
         let intentRootHash = "0x-offline-intent";
@@ -134,11 +134,6 @@ class SovereignAgent {
 
         // 6. Final Settlement on-chain
         console.log(`[Settlement] Calling AgentRegistry.logIntent on 0G Chain...`);
-        // Decode hex-encoded proof output from ZK engine
-        const proofBytes = Buffer.from(zkOutput.proof, "hex");
-        const pubValBytes = Buffer.from(zkOutput.public_values, "hex");
-
-        const pubInputs = this.bytesToUint256Array(pubValBytes);
         const tx = await this.registry.logIntent(agentId, intentRootHash, pubInputs, proofBytes);
         const receipt = await this.waitForReceipt(tx);
 

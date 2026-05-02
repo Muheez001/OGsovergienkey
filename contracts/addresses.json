@@ -1,4 +1,5 @@
 {
-  "MockZKVerifier": "0x...",
-  "AgentRegistry": "0x04D25632b0bAb33FD1C77c4eA9d591c4765F3aF5"
+  "Verifier": "0xd9C4d2FE3a4362db2A05aFA3d51934E2C31E9Ba9",
+  "MockZKVerifier": "0x249FDe03972b58fE1a39fa7049a40Ec904787165",
+  "AgentRegistry": "0x65aAd1b52D7aD324dC98CB0EC9AACc3AF8036989"
 }

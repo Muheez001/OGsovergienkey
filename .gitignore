@@ -15,10 +15,15 @@ contracts/cache/
 contracts/typechain-types/
 contracts/dist/
 
-# ZK Engine (snarkjs / circom)
+# ZK Engine (circom + snarkjs)
 zk-engine/build/
 zk-engine/dist/
 zk-engine/node_modules/
+zk-engine/target/
+zk-engine/program/elf/
+*.ptau
+zk-engine/circuits/pot*
+zk-engine/circuits/circuit_0.zkey
 
 # AI Orchestrator
 ai-orchestrator/dist/
@@ -30,6 +35,7 @@ ai-orchestrator/dist/
 .env.test.local
 .env.production.local
 *.env
+mission-control/.env.local
 
 # Logs
 *.log
