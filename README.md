@@ -51,7 +51,7 @@ cd zk-engine/circuits
 
 ### 4. Launch Dashboard
 ```bash
-cd mission-control
+
 npm run dev
 ```
 Open [http://localhost:3001](http://localhost:3001) to start spawning agents!
@@ -326,7 +326,7 @@ Phase 5: SETTLEMENT
 ## 0G Galileo Testnet — Key Addresses
 
 | Contract | Address | Explorer |
-|---|---|---|
+|---|---|---|cd mission-control
 | AgentRegistry | [`0x65aAd1b52D7aD324dC98CB0EC9AACc3AF8036989`](https://chainscan-galileo.0g.ai/address/0x65aAd1b52D7aD324dC98CB0EC9AACc3AF8036989) | [View on Chainscan](https://chainscan-galileo.0g.ai/address/0x65aAd1b52D7aD324dC98CB0EC9AACc3AF8036989) |
 | Verifier (Groth16) | [`0xd9C4d2FE3a4362db2A05aFA3d51934E2C31E9Ba9`](https://chainscan-galileo.0g.ai/address/0xd9C4d2FE3a4362db2A05aFA3d51934E2C31E9Ba9) | [View on Chainscan](https://chainscan-galileo.0g.ai/address/0xd9C4d2FE3a4362db2A05aFA3d51934E2C31E9Ba9) |
 

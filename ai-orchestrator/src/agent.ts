@@ -114,7 +114,7 @@ class SovereignAgent {
 
         // 2. Generate ZK Proof via snarkjs
         const provingStart = Date.now();
-        const { pubInputs, proofBytes } = await generateProof(
+        const { pA, pB, pC, pubSignals } = await generateProof(
             amount, 
             targetAddress, 
             1000, 
@@ -134,7 +134,7 @@ class SovereignAgent {
 
         // 6. Final Settlement on-chain
         console.log(`[Settlement] Calling AgentRegistry.logIntent on 0G Chain...`);
-        const tx = await this.registry.logIntent(agentId, intentRootHash, pubInputs, proofBytes);
+        const tx = await this.registry.logIntent(agentId, intentRootHash, pA, pB, pC, pubSignals);
         const receipt = await this.waitForReceipt(tx);
 
         console.log(`✅ Intent anchored on-chain! Memory Root: ${intentRootHash}, TX: ${receipt.hash}`);

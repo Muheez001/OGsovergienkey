@@ -25,13 +25,15 @@ export async function POST(request: Request) {
     }
 
     // 3. Execution (Using ts-node transpile-only for speed)
-    // Raised timeout to 45 minutes for REAL SP1 ZK proving + compilation
+    // Timeout: 10 minutes (Groth16 proving typically takes 10-60s, network calls add some buffer)
+    // maxBuffer: 50MB to prevent stdout accumulation from consuming RAM
     const command = `npx ts-node --transpile-only src/agent.ts`;
 
     const { stdout, stderr } = await execAsync(command, {
       cwd: orchestratorPath,
-      timeout: 2700000, 
-      env: { ...process.env, TS_NODE_TRANSPILE_ONLY: "true" }
+      timeout: 600000,       // 10 minutes (was 45 min — way too long, freezes PC if stuck)
+      maxBuffer: 50 * 1024 * 1024,  // 50MB stdout buffer cap
+      env: { ...process.env, TS_NODE_TRANSPILE_ONLY: "true", NODE_OPTIONS: "--max-old-space-size=4096" }
     });
 
     if (stderr && stderr.includes("Error")) {
@@ -61,7 +63,7 @@ export async function POST(request: Request) {
     
     const isTimeout = err.signal === "SIGTERM" || err.code === "ETIMEDOUT";
     const errorMessage = isTimeout 
-        ? "ZK Proving timed out (exceeded 45 minutes)" 
+        ? "ZK Proving timed out (exceeded 10 minutes). Your system may not have enough free RAM — close other apps and retry." 
         : (err.message || "Internal server error during agent spawning");
 
     return NextResponse.json({

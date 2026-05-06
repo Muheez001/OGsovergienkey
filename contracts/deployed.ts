@@ -12,8 +12,8 @@ export const AGENT_REGISTRY_ABI = [
     name: "agents",
     outputs: [
       { name: "owner", type: "address" },
-      { name: "pubKey", type: "string" },
-      { name: "constitutionHash", type: "string" },
+      { name: "pubKeyHash", type: "bytes32" },
+      { name: "constitutionHash", type: "bytes32" },
       { name: "isActive", type: "bool" },
     ],
     stateMutability: "view",
@@ -30,8 +30,8 @@ export const AGENT_REGISTRY_ABI = [
   // ── Write Functions ───────────────────────────────────────
   {
     inputs: [
-      { name: "pubKey", type: "string" },
-      { name: "constitutionHash", type: "string" },
+      { name: "pubKey", type: "bytes32" },
+      { name: "constitutionHash", type: "bytes32" },
     ],
     name: "registerAgent",
     outputs: [{ name: "", type: "uint256" }],
@@ -41,7 +41,7 @@ export const AGENT_REGISTRY_ABI = [
   {
     inputs: [
       { name: "agentId", type: "uint256" },
-      { name: "newConstitutionHash", type: "string" },
+      { name: "newConstitutionHash", type: "bytes32" },
     ],
     name: "updateConstitution",
     outputs: [],
@@ -52,8 +52,10 @@ export const AGENT_REGISTRY_ABI = [
     inputs: [
       { name: "agentId", type: "uint256" },
       { name: "intentDataId", type: "string" },
-      { name: "pubInputs", type: "uint256[]" },
-      { name: "zkProof", type: "bytes" },
+      { name: "_pA", type: "uint256[2]" },
+      { name: "_pB", type: "uint256[2][2]" },
+      { name: "_pC", type: "uint256[2]" },
+      { name: "_pubSignals", type: "uint256[4]" },
     ],
     name: "logIntent",
     outputs: [],
@@ -67,8 +69,8 @@ export const AGENT_REGISTRY_ABI = [
     inputs: [
       { indexed: true, name: "agentId", type: "uint256" },
       { indexed: true, name: "owner", type: "address" },
-      { indexed: false, name: "pubKey", type: "string" },
-      { indexed: false, name: "constitutionHash", type: "string" },
+      { indexed: false, name: "pubKeyHash", type: "bytes32" },
+      { indexed: false, name: "constitutionHash", type: "bytes32" },
     ],
     name: "AgentRegistered",
     type: "event",
@@ -77,7 +79,7 @@ export const AGENT_REGISTRY_ABI = [
     anonymous: false,
     inputs: [
       { indexed: true, name: "agentId", type: "uint256" },
-      { indexed: false, name: "newConstitutionHash", type: "string" },
+      { indexed: false, name: "newConstitutionHash", type: "bytes32" },
     ],
     name: "ConstitutionUpdated",
     type: "event",
@@ -100,8 +102,8 @@ export const AGENT_REGISTRY_ABI = [
 export const DEPLOYED_ADDRESSES = {
   // 0G Galileo Testnet (chain ID 16602)
   "0g-testnet": {
-    AgentRegistry: "0x_PASTE_DEPLOYED_ADDRESS_HERE",
-    MockZKVerifier: "0x_PASTE_DEPLOYED_ADDRESS_HERE",
+    AgentRegistry: "0x65aAd1b52D7aD324dC98CB0EC9AACc3AF8036989",
+    MockZKVerifier: "0x249FDe03972b58fE1a39fa7049a40Ec904787165",
   },
 } as const;
 
