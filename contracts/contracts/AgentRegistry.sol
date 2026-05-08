@@ -30,7 +30,7 @@ contract AgentRegistry is Ownable {
     mapping(uint256 => Agent) public agents;
     mapping(uint256 => Task[]) public agentTasks;
     
-    // Reference to the Zero Knowledge Verifier Contract
+    // Reference to the Zero Knowledge Verifier Contract (Groth16)
     IZKVerifier public verifier;
 
     mapping(address => bool) public authorizedOperators;
@@ -98,9 +98,15 @@ contract AgentRegistry is Ownable {
     }
 
     /**
-     * @dev Logs an agent intent. The system requires a valid ZK proof confirming
-     * that the intent adheres to the current constitution.
+     * @dev Logs an agent intent. Requires a valid Groth16 ZK proof confirming
+     *      that the intent adheres to the current constitution.
+     *
+     * @param agentId      The agent submitting the intent
      * @param intentDataId A reference ID to the raw intent data stored on 0G DA
+     * @param pA           Groth16 proof point A
+     * @param pB           Groth16 proof point B
+     * @param pC           Groth16 proof point C
+     * @param pubSignals   Public signals: [intentAmount, targetAddress, assetId, valid]
      */
     function logIntent(
         uint256 agentId, 
@@ -118,7 +124,7 @@ contract AgentRegistry is Ownable {
         require(isValid, "ZK Proof is invalid");
 
         // 2. If valid, log the intent to the registry memory 
-        // Note: Actual intent execution happen natively via MPC signing, 
+        // Note: Actual intent execution happens natively via MPC signing, 
         // This transaction serves as the verifiable log entry on the 0G Chain.
         emit IntentLogged(agentId, intentDataId);
     }

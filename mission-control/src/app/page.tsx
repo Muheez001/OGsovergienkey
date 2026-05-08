@@ -6,7 +6,8 @@ import { TerminalLog } from "@/components/TerminalLog";
 import { StatsCard } from "@/components/StatsCard";
 import { motion, AnimatePresence } from "framer-motion";
 import { Shield, Sparkles, Activity, Loader2, Wallet, Cpu, Network, RotateCw, PlusCircle } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { toast } from "sonner";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
 
@@ -33,13 +34,13 @@ interface Agent {
 interface NetworkStatus {
   success: boolean;
   wallet: {
-      address: string;
-      balance: string;
+    address: string;
+    balance: string;
   };
   network: {
-      totalAgents: number;
-      rpcStatus: string;
-      indexerUrl: string;
+    totalAgents: number;
+    rpcStatus: string;
+    indexerUrl: string;
   }
 }
 
@@ -55,7 +56,79 @@ export default function MissionControl() {
   const [isLoadingAgents, setIsLoadingAgents] = useState(true);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [runtimeLogs, setRuntimeLogs] = useState<string[]>([]);
-  
+
+  const vantaRef = useRef<HTMLDivElement>(null);
+  const vantaEffect = useRef<any>(null);
+
+  // ─── VANTA WAVES CONFIG ─── (loads via CDN to avoid webpack UMD issues) ───
+  useEffect(() => {
+    let cancelled = false;
+
+    function loadScript(src: string): Promise<void> {
+      return new Promise((resolve, reject) => {
+        // Check if already loaded
+        if (document.querySelector(`script[src="${src}"]`)) {
+          resolve();
+          return;
+        }
+        const script = document.createElement("script");
+        script.src = src;
+        script.async = true;
+        script.onload = () => resolve();
+        script.onerror = () => reject(new Error(`Failed to load: ${src}`));
+        document.head.appendChild(script);
+      });
+    }
+
+    async function initVanta() {
+      if (vantaEffect.current || !vantaRef.current) return;
+
+      try {
+        // Load THREE.js from CDN first — Vanta needs window.THREE to exist
+        await loadScript("https://cdnjs.cloudflare.com/ajax/libs/three.js/r134/three.min.js");
+        if (cancelled || !vantaRef.current) return;
+
+        // Now load Vanta waves — it will pick up window.THREE automatically
+        await loadScript("https://cdn.jsdelivr.net/npm/vanta@latest/dist/vanta.waves.min.js");
+        if (cancelled || !vantaRef.current) return;
+
+        const VANTA = (window as any).VANTA;
+        if (!VANTA?.WAVES) {
+          console.warn("[Vanta] VANTA.WAVES not available after script load");
+          return;
+        }
+
+        vantaEffect.current = VANTA.WAVES({
+          el: vantaRef.current,
+          mouseControls: true,
+          touchControls: true,
+          gyroControls: false,
+          minHeight: 200.00,
+          minWidth: 200.00,
+          scale: 1.00,
+          scaleMobile: 1.00,
+          color: 0xb0b,
+          shininess: 150.00,
+          waveHeight: 40.0,
+          waveSpeed: 0.15,
+          zoom: 1.75
+        });
+      } catch (err) {
+        console.error("[Vanta] Failed to initialize:", err);
+      }
+    }
+
+    initVanta();
+
+    return () => {
+      cancelled = true;
+      if (vantaEffect.current) {
+        vantaEffect.current.destroy();
+        vantaEffect.current = null;
+      }
+    };
+  }, []);
+
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const agentsPerPage = 6;
@@ -117,7 +190,8 @@ export default function MissionControl() {
     setSpawnError(null);
     setIsSpawning(true);
     setRuntimeLogs(["Initializing Peer-to-Peer Orchestrator...", "Contacting 0G Galileo Testnet..."]);
-    
+    toast.info("Initializing Agent Genesis Sequence...");
+
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minute UI timeout for complex ZK circuits
 
@@ -136,14 +210,17 @@ export default function MissionControl() {
 
       if (!data.success) {
         setRuntimeLogs(prev => [...prev, `❌ ERROR: ${data.message}`]);
+        toast.error(`Spawn failed: ${data.message}`);
         throw new Error(data.message || "Spawn failed");
       }
 
+      toast.success(`Agent ${data.name} successfully spawned and anchored on-chain!`);
+
       const logs = data.logs ? data.logs.split("\n").filter((l: string) => l.trim().length > 0) : [];
       setRuntimeLogs(prev => [...prev, ...logs, "✅ E2E Cycle Finalized."]);
-      
+
       if (data.provingTime !== "N/A") {
-          setLastProvingTime(data.provingTime);
+        setLastProvingTime(data.provingTime);
       }
 
       fetchAgents();
@@ -155,6 +232,7 @@ export default function MissionControl() {
         const err = error as Error;
         console.error("Spawn failed:", err);
         setSpawnError(err.message || "Spawn failed — check terminal logs for details.");
+        toast.error(err.message || "Spawn failed");
       }
     } finally {
       setIsSpawning(false);
@@ -170,21 +248,23 @@ export default function MissionControl() {
   const paginate = (pageNumber: number) => setCurrentPage(pageNumber);
 
   return (
-    <main className="min-h-screen p-8 lg:p-24 relative overflow-hidden bg-[#020408]">
+    <main ref={vantaRef} className="min-h-screen p-8 lg:p-24 relative overflow-hidden transition-colors duration-1000 z-0">
       {/* Background ambient glows */}
-      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-brand-cyan/20 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-brand-purple/20 blur-[120px] rounded-full pointer-events-none" />
-      
+      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-brand-cyan/20 blur-[120px] rounded-full pointer-events-none -z-10" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-brand-purple/20 blur-[120px] rounded-full pointer-events-none -z-10" />
+
       {/* Digital Soul Grid Pattern */}
-      <div className="absolute inset-0 z-0 opacity-[0.03] pointer-events-none" 
-           style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '40px 40px' }} />
+      <div className="absolute inset-0 z-0 opacity-[0.03] pointer-events-none"
+        style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '40px 40px' }} />
+      <div className="absolute inset-0 z-0 opacity-[0.02] pointer-events-none"
+        style={{ backgroundImage: 'linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)', backgroundSize: '200px 200px' }} />
 
       <div className="max-w-7xl mx-auto relative z-10">
-        
+
         {/* Header Area */}
         <header className="mb-16 flex flex-col md:flex-row items-start md:items-end justify-between gap-6">
           <div>
-            <motion.div 
+            <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-brand-cyan/50 bg-brand-cyan/10 text-brand-cyan text-[10px] font-bold uppercase tracking-widest mb-4"
@@ -200,28 +280,35 @@ export default function MissionControl() {
           </div>
           <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
             <ConnectButtonCustom />
-            <button
-                onClick={handleSpawn}
-                disabled={isSpawning}
-                className={cn(
-                  "px-8 py-3 rounded-xl font-bold text-sm uppercase tracking-[0.2em] transition-all flex items-center gap-3",
-                  isSpawning 
-                    ? "bg-white/10 text-white/40 cursor-not-allowed border border-white/5" 
-                    : "bg-brand-cyan text-black hover:shadow-[0_0_20px_rgba(0,255,209,0.4)] hover:-translate-y-1 active:translate-y-0"
-                )}
-              >
-                {isSpawning ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Genesis Proving ({formatTime(spawnTimer)})
-                  </>
-                ) : (
-                  <>
-                    <PlusCircle className="w-4 h-4" />
-                    Spawn Sovereign Agent
-                  </>
-                )}
-              </button>
+            <motion.button
+              disabled={isSpawning}
+              onClick={handleSpawn}
+              whileHover={isSpawning ? {} : {
+                scale: 1.05,
+                boxShadow: "0 0 25px rgba(0, 255, 209, 0.4), 0 0 60px rgba(0, 255, 209, 0.15)",
+                borderColor: "rgba(0, 255, 209, 0.5)",
+              }}
+              whileTap={isSpawning ? {} : { scale: 0.97 }}
+              transition={{ type: "spring", stiffness: 400, damping: 20 }}
+              className={cn(
+                "px-8 py-4 rounded-xl flex items-center gap-3 transition-all font-bold text-sm uppercase tracking-[0.2em] border border-white/10",
+                isSpawning 
+                  ? "bg-white/10 text-white/40 cursor-not-allowed" 
+                  : "bg-brand-cyan text-black hover:bg-brand-cyan/90"
+              )}
+            >
+              {isSpawning ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  Genesis Proving ({formatTime(spawnTimer)})
+                </>
+              ) : (
+                <>
+                  <PlusCircle className="w-5 h-5" />
+                  Spawn Sovereign Agent
+                </>
+              )}
+            </motion.button>
           </div>
         </header>
 
@@ -271,7 +358,7 @@ export default function MissionControl() {
               <h2 className="text-xl font-semibold flex items-center gap-2 border-b border-white/10 pb-2 flex-1 text-white/90 uppercase tracking-wider text-xs font-bold opacity-60 font-display">
                 <Shield className="w-5 h-5 text-white/50" /> Active Fleet
               </h2>
-              <button 
+              <button
                 onClick={fetchAgents}
                 disabled={isLoadingAgents}
                 className="ml-4 p-2 rounded-xl bg-white/5 border border-white/10 text-white/40 hover:text-white hover:bg-white/10 transition-all disabled:opacity-20"
@@ -280,7 +367,7 @@ export default function MissionControl() {
                 <RotateCw className={`w-4 h-4 ${isLoadingAgents ? "animate-spin" : ""}`} />
               </button>
             </div>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <AnimatePresence mode="popLayout">
                 {isLoadingAgents ? (
@@ -289,7 +376,7 @@ export default function MissionControl() {
                   ))
                 ) : (
                   currentAgents.map((agent) => (
-                    <AgentCard 
+                    <AgentCard
                       key={agent.id}
                       name={agent.name}
                       id={agent.id}
@@ -307,7 +394,7 @@ export default function MissionControl() {
 
             {!isLoadingAgents && agents.length > agentsPerPage && (
               <div className="flex items-center justify-center gap-4 mt-8">
-                <button 
+                <button
                   onClick={() => paginate(currentPage - 1)}
                   disabled={currentPage === 1}
                   className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white disabled:opacity-20 transition-all"
@@ -319,17 +406,16 @@ export default function MissionControl() {
                     <button
                       key={i}
                       onClick={() => paginate(i + 1)}
-                      className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all border ${
-                        currentPage === i + 1 
-                          ? "bg-brand-purple/20 border-brand-purple text-brand-purple" 
-                          : "bg-white/5 border-white/10 text-white/40 hover:text-white"
-                      }`}
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all border ${currentPage === i + 1
+                        ? "bg-brand-purple/20 border-brand-purple text-brand-purple"
+                        : "bg-white/5 border-white/10 text-white/40 hover:text-white"
+                        }`}
                     >
                       {i + 1}
                     </button>
                   ))}
                 </div>
-                <button 
+                <button
                   onClick={() => paginate(currentPage + 1)}
                   disabled={currentPage === totalPages}
                   className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white/60 hover:text-white disabled:opacity-20 transition-all"
@@ -354,9 +440,9 @@ export default function MissionControl() {
         </div>
       </div>
       {/* Agent Detail Modal */}
-      <AgentDetailModal 
-        agent={selectedAgent} 
-        onClose={() => setSelectedAgent(null)} 
+      <AgentDetailModal
+        agent={selectedAgent}
+        onClose={() => setSelectedAgent(null)}
       />
     </main>
   );

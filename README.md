@@ -15,8 +15,8 @@ Sovereign Agent Keys (SAK) is a decentralized infrastructure layer that allows A
 
 ### Why SAK?
 - 🔐 **MPC Key Sharding**: Agent private keys are split via Shamir 2-of-3 secret sharing. Shards are stored securely on **0G Storage**, ensuring no single point of failure.
-- 🛡️ **Verifiable Constitutions**: Every agent is born with a ZK-Constitution. All actions must be mathematically proven (Groth16) against these rules before they can settle on-chain.
-- 🧠 **Immutable Intent Memory**: Every decision and instruction is logged to **0G DA**, creating a permanent, audit-ready memory trail for autonomous agents.
+- 🛡️ **Verifiable Constitutions**: Every action must be mathematically proven (Groth16) against these rules before it can settle on-chain.
+- 🧠 **Immutable Intent Memory**: Every decision is logged to **0G DA**, creating a permanent, audit-ready memory trail.
 
 ---
 
@@ -25,10 +25,10 @@ Sovereign Agent Keys (SAK) is a decentralized infrastructure layer that allows A
 The SAK Mission Control is a premium, low-latency dashboard designed for the next generation of AI operators.
 
 ### Key Features:
-- **Genesis Orchestrator**: Real-time visualization of the ZK Genesis phase, where agents prove their logic before being registered on the 0G Chain.
-- **Sovereign Command Console**: A terminal-style interface for issuing authorized instructions directly to agents via the `AgentRegistry`.
-- **Identity vs Governance**: Clear separation between an agent's cryptographic shards (Private) and its verifiable intent logs (Public).
-- **Live Telemetry**: Monitor 0G Testnet health, agent fleet integrity, and ZK proving performance in real-time.
+- **Genesis Orchestrator**: Real-time visualization of the ZK Genesis phase and 0G Storage anchoring.
+- **Sovereign Command Console**: A terminal-style interface for issuing authorized instructions.
+- **Vanta Waves Background**: High-fidelity animated UI for a next-level operator experience.
+- **Live Telemetry**: Monitor 0G Testnet health, agent fleet integrity, and ZK proving performance.
 
 ---
 
@@ -45,12 +45,13 @@ graph TD
     D -->|Register| H[AgentRegistry.sol]
 ```
 
-### Stack Breakdown:
-- **Settlement Layer**: 0G Galileo Testnet (EVM).
-- **Storage Layer**: 0G Storage (Turbo Indexer) for shard persistence.
-- **Memory Layer**: 0G Data Availability (DA) for immutable intent logging.
-- **Cryptography**: Circom 2.1 + snarkjs (Groth16) for verifiable governance.
-- **Frontend**: Next.js 15, Tailwind 4, Framer Motion, and Wagmi.
+### Module Breakdown:
+| Module | Stack | Role |
+|---|---|---|
+| `contracts/` | Solidity 0.8.24 + Hardhat | AgentRegistry + Groth16 Verifier on 0G EVM |
+| `zk-engine/` | Circom 2.1 + snarkjs | ZK circuit enforcing agent constitution rules |
+| `ai-orchestrator/` | TypeScript + `@0gfoundation/0g-ts-sdk` | Agent brain: MPC, storage, DA, proving |
+| `mission-control/` | Next.js 16 + Tailwind CSS v4 | Operator dashboard with real-time telemetry |
 
 ---
 
@@ -66,49 +67,10 @@ graph TD
 
 ## 🛠️ Quick Start Guide
 
-### Prerequisites
-- Node.js >= 20.x
-- A wallet funded with 0G Galileo Testnet tokens ([Faucet](https://faucet.0g.ai))
-
-### 1. Installation
-```bash
-git clone https://github.com/barneybo18/OGsovergienkey.git
-cd OGsovergienkey
-# Install dependencies for all modules
-npm install --workspaces
-```
-
-### 2. Environment Setup
-Create a `.env` file in **both** `ai-orchestrator/` and `mission-control/`:
-```env
-PRIVATE_KEY=0x... # Your Galileo Wallet Private Key
-RPC_ENDPOINT=https://evmrpc-testnet.0g.ai/
-INDEXER_URL=https://indexer-storage-testnet-turbo.0g.ai
-```
-
-### 3. Launch Mission Control
-```bash
-cd mission-control
-npm run dev
-```
-Open `http://localhost:3000` to start spawning your sovereign AI fleet.
+1. **Clone & Install**: `npm install --workspaces`
+2. **Environment Setup**: Add `PRIVATE_KEY` and `RPC_ENDPOINT` to `.env` in both `ai-orchestrator` and `mission-control`.
+3. **Launch**: `cd mission-control && npm run dev`
 
 ---
 
-## 🏆 Hackathon Highlights (0G APAC Akon's Quest)
-
-We have deeply integrated 0G primitives to solve the "AI Trust Problem":
-1. **0G Storage**: Used for decentralized persistence of MPC shards, ensuring agent keys are never stored in a single database.
-2. **0G DA**: Used as the agent's "Short-Term Memory," logging intents at high frequency without polluting the main chain's state.
-3. **0G Chain**: The source of truth where ZK proofs are verified to anchor agent behavior to their immutable constitutions.
-
----
-
-## Links & Resources
-- **Project Walkthrough**: [walkthrough.md](./walkthrough.md)
-- **Detailed Architecture**: [ARCHITECTURE.md](./ARCHITECTURE.md)
-- **0G Explorer**: [chainscan-galileo.0g.ai](https://chainscan-galileo.0g.ai)
-
----
-
-> *"True AI autonomy is not found in a centralized server, but in the cryptographic sovereignty of the 0G network."*
+> *"An agent is only as powerful as its autonomy. True autonomy requires sovereignty."*
