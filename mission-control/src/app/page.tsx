@@ -5,8 +5,20 @@ import { AgentDetailModal } from "@/components/AgentDetailModal";
 import { TerminalLog } from "@/components/TerminalLog";
 import { StatsCard } from "@/components/StatsCard";
 import { motion, AnimatePresence } from "framer-motion";
-import { Shield, Sparkles, Activity, Loader2, Wallet, Cpu, Network, RotateCw } from "lucide-react";
+import { Shield, Sparkles, Activity, Loader2, Wallet, Cpu, Network, RotateCw, PlusCircle } from "lucide-react";
 import { useState, useEffect } from "react";
+import { clsx, type ClassValue } from "clsx";
+import { twMerge } from "tailwind-merge";
+
+function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs));
+}
+
+const formatTime = (seconds: number) => {
+  const m = Math.floor(seconds / 60);
+  const s = seconds % 60;
+  return `${m > 0 ? `${m}m ` : ""}${s}s`;
+};
 
 interface Agent {
   name: string;
@@ -31,7 +43,13 @@ interface NetworkStatus {
   }
 }
 
+import { useAccount, useBalance } from "wagmi";
+import { ConnectButtonCustom } from "@/components/ConnectButton";
+
 export default function MissionControl() {
+  const { address, isConnected } = useAccount();
+  const { data: balanceData } = useBalance({ address });
+
   const [isSpawning, setIsSpawning] = useState(false);
   const [agents, setAgents] = useState<Agent[]>([]);
   const [isLoadingAgents, setIsLoadingAgents] = useState(true);
@@ -46,6 +64,18 @@ export default function MissionControl() {
   const [networkData, setNetworkData] = useState<NetworkStatus | null>(null);
   const [lastProvingTime, setLastProvingTime] = useState<string>("0s");
   const [spawnError, setSpawnError] = useState<string | null>(null);
+  const [spawnTimer, setSpawnTimer] = useState(0);
+
+  useEffect(() => {
+    let interval: NodeJS.Timeout;
+    if (isSpawning) {
+      setSpawnTimer(0);
+      interval = setInterval(() => {
+        setSpawnTimer(prev => prev + 1);
+      }, 1000);
+    }
+    return () => clearInterval(interval);
+  }, [isSpawning]);
 
   const fetchAgents = async () => {
     setIsLoadingAgents(true);
@@ -80,12 +110,16 @@ export default function MissionControl() {
   }, []);
 
   const handleSpawn = async () => {
+    if (!isConnected) {
+        setSpawnError("Please connect your wallet first to spawn an agent.");
+        return;
+    }
     setSpawnError(null);
     setIsSpawning(true);
     setRuntimeLogs(["Initializing Peer-to-Peer Orchestrator...", "Contacting 0G Galileo Testnet..."]);
     
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 45000); // 45s UI timeout
+    const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minute UI timeout for complex ZK circuits
 
     try {
       const response = await fetch("/api/spawn-agent", {
@@ -93,7 +127,7 @@ export default function MissionControl() {
         headers: { "Content-Type": "application/json" },
         signal: controller.signal,
         body: JSON.stringify({
-          name: `Sovereign-Alpha-${Math.floor(Math.random() * 999)}`,
+          name: `SAK-Agent-${Math.floor(Math.random() * 9999)}`,
         }),
       });
       clearTimeout(timeoutId);
@@ -112,13 +146,16 @@ export default function MissionControl() {
           setLastProvingTime(data.provingTime);
       }
 
-      // Re-fetch the full list to ensure everything is in sync
       fetchAgents();
       fetchNetworkStatus(); 
-    } catch (error: unknown) {
-      const err = error as Error;
-      console.error("Spawn failed:", err);
-      setSpawnError(err.message || "Spawn failed — check terminal logs for details.");
+    } catch (error: any) {
+      if (error.name === 'AbortError') {
+        setSpawnError("ZK Proving taking longer than 10 minutes. The agent creation is likely still processing on the server—please refresh in a moment.");
+      } else {
+        const err = error as Error;
+        console.error("Spawn failed:", err);
+        setSpawnError(err.message || "Spawn failed — check terminal logs for details.");
+      }
     } finally {
       setIsSpawning(false);
     }
@@ -141,8 +178,6 @@ export default function MissionControl() {
       {/* Digital Soul Grid Pattern */}
       <div className="absolute inset-0 z-0 opacity-[0.03] pointer-events-none" 
            style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, white 1px, transparent 0)', backgroundSize: '40px 40px' }} />
-      <div className="absolute inset-0 z-0 opacity-[0.02] pointer-events-none" 
-           style={{ backgroundImage: 'linear-gradient(to right, white 1px, transparent 1px), linear-gradient(to bottom, white 1px, transparent 1px)', backgroundSize: '200px 200px' }} />
 
       <div className="max-w-7xl mx-auto relative z-10">
         
@@ -152,67 +187,79 @@ export default function MissionControl() {
             <motion.div 
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-brand-cyan bg-brand-cyan/10 text-brand-cyan text-xs font-bold uppercase tracking-widest mb-4"
+              className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-brand-cyan/50 bg-brand-cyan/10 text-brand-cyan text-[10px] font-bold uppercase tracking-widest mb-4"
             >
-              <Activity className="w-4 h-4" /> 0G Galileo Testnet Active
+              <Activity className="w-3 h-3" /> Network: 0G Galileo Testnet
             </motion.div>
             <h1 className="text-5xl md:text-7xl font-extrabold tracking-tighter mb-4 text-white font-display">
-              Sovereign <span className="text-gradient">Agents</span>
+              Mission <span className="text-gradient">Control</span>
             </h1>
-            <p className="text-lg text-white/60 max-w-2xl font-light">
-              Mission Control Dashboard. Monitor AI execution, enforce cryptographic constitutions, and manage immutable intent memory on the 0G DA layer.
+            <p className="text-base text-white/50 max-w-2xl font-light leading-relaxed">
+              Decentralized AI Governance. Securely spawn agents, verify cryptographic constitutions via ZK-SNARKs, and manage high-integrity intent memory on the 0G DA layer.
             </p>
           </div>
-          <button 
-            disabled={isSpawning}
-            onClick={handleSpawn}
-            className="glass-panel px-8 py-4 rounded-full flex items-center gap-2 hover:bg-white/5 active:scale-95 transition-all text-white font-semibold disabled:opacity-50 disabled:cursor-not-allowed border border-white/10"
-          >
-            {isSpawning ? (
-              <>
-                <Loader2 className="w-5 h-5 text-brand-purple animate-spin" />
-                Wait (ZK Proving)...
-              </>
-            ) : (
-              <>
-                <Sparkles className="w-5 h-5 text-brand-purple" />
-                Spawn Agent
-              </>
-            )}
-          </button>
+          <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+            <ConnectButtonCustom />
+            <button
+                onClick={handleSpawn}
+                disabled={isSpawning}
+                className={cn(
+                  "px-8 py-3 rounded-xl font-bold text-sm uppercase tracking-[0.2em] transition-all flex items-center gap-3",
+                  isSpawning 
+                    ? "bg-white/10 text-white/40 cursor-not-allowed border border-white/5" 
+                    : "bg-brand-cyan text-black hover:shadow-[0_0_20px_rgba(0,255,209,0.4)] hover:-translate-y-1 active:translate-y-0"
+                )}
+              >
+                {isSpawning ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Genesis Proving ({formatTime(spawnTimer)})
+                  </>
+                ) : (
+                  <>
+                    <PlusCircle className="w-4 h-4" />
+                    Spawn Sovereign Agent
+                  </>
+                )}
+              </button>
+          </div>
         </header>
 
         {spawnError && (
-          <div className="mb-8 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-sm font-medium flex items-center gap-3">
-            ❌ {spawnError}
-          </div>
+          <motion.div 
+            initial={{ opacity: 0, x: -20 }}
+            animate={{ opacity: 1, x: 0 }}
+            className="mb-8 p-4 rounded-2xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium flex items-center gap-3"
+          >
+            <Shield className="w-4 h-4 shrink-0" /> {spawnError}
+          </motion.div>
         )}
 
         {/* Real-Data Metrics Row */}
         <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
             <StatsCard 
-                title="Wallet Intelligence" 
-                value={networkData?.wallet?.balance || "0.00"} 
-                label="$0G" 
+                title="Connected Assets" 
+                value={isConnected ? parseFloat(balanceData?.formatted || "0").toFixed(2) : "---"} 
+                label={balanceData?.symbol || "$0G"} 
                 icon={<Wallet size={20} />}
-                trend={networkData?.wallet?.address ? `Addr: ${networkData.wallet.address.slice(0,6)}...${networkData.wallet.address.slice(-4)}` : "Checking RPC..."}
+                trend={isConnected ? `Connected: ${address?.slice(0,6)}...${address?.slice(-4)}` : "Wallet not connected"}
+                status={isConnected ? "online" : "offline"}
+            />
+            <StatsCard 
+                title="AI Fleet Integrity" 
+                value={networkData?.network?.totalAgents || "0"} 
+                label="Registered" 
+                icon={<Shield size={20} />}
+                trend={`Node Status: ${networkData?.network?.rpcStatus || "Checking..."}`}
                 status={networkData ? "online" : "loading"}
             />
             <StatsCard 
-                title="ZK Proving Stats" 
+                title="ZK Proving Engine" 
                 value={lastProvingTime} 
                 label="Duration" 
                 icon={<Cpu size={20} />}
-                trend="Groth16 (snarkjs / circom 2.0)"
+                trend="snarkjs / Groth16 / Circom 2.1"
                 status={isSpawning ? "loading" : "online"}
-            />
-            <StatsCard 
-                title="Network Vitality" 
-                value={networkData?.network?.totalAgents || "0"} 
-                label="Deploys" 
-                icon={<Network size={20} />}
-                trend={`Node: ${networkData?.network?.rpcStatus || "Syncing"}`}
-                status={networkData ? "online" : "loading"}
             />
         </section>
 
