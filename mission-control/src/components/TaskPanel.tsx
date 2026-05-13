@@ -19,6 +19,8 @@ export function TaskPanel({ agentId, owner }: { agentId: string; owner: string }
   const [loading, setLoading] = useState(false);
   const [tasks, setTasks] = useState<Task[]>([]);
   const [fetching, setFetching] = useState(false);
+  const [status, setStatus] = useState<string>('');
+  const [isProving, setIsProving] = useState(false);
 
   // Strip "ID: " from agentId if present
   const cleanId = agentId.replace('ID: ', '');
@@ -46,6 +48,7 @@ export function TaskPanel({ agentId, owner }: { agentId: string; owner: string }
   const handleExecute = async () => {
     if (!instruction) return;
     setLoading(true);
+    setStatus('Dispatching ZK task...');
     try {
       const res = await fetch('/api/agent/execute', {
         method: 'POST',
@@ -55,15 +58,44 @@ export function TaskPanel({ agentId, owner }: { agentId: string; owner: string }
       const data = await res.json();
       if (data.success) {
         setInstruction('');
-        fetchTasks();
+        setLoading(false);
+        setStatus('');
+        // Task is proving in the background — poll the chain every 15s
+        setIsProving(true);
+        setStatus('Generating ZK Proof... (30-60s)');
+        let attempts = 0;
+        const maxAttempts = 12; // 12 * 15s = 3 minutes
+        const poll = setInterval(async () => {
+          attempts++;
+          const prevCount = tasks.length;
+          await fetchTasks();
+          setStatus(`Proving in background... polling chain (${attempts}/${maxAttempts})`);
+          // If we got a new task, stop polling
+          setTasks(prev => {
+            if (prev.length > prevCount) {
+              clearInterval(poll);
+              setIsProving(false);
+              setStatus('');
+            }
+            return prev;
+          });
+          if (attempts >= maxAttempts) {
+            clearInterval(poll);
+            setIsProving(false);
+            setStatus('Proof may still be processing — click Refresh.');
+            setTimeout(() => setStatus(''), 5000);
+          }
+        }, 15000);
       } else {
         alert("Execution failed: " + data.message);
+        setLoading(false);
+        setStatus('');
       }
     } catch (e) {
       console.error(e);
-      alert("Error triggering task execution.");
-    } finally {
+      alert("Error dispatching task.");
       setLoading(false);
+      setStatus('');
     }
   };
 
@@ -100,7 +132,7 @@ export function TaskPanel({ agentId, owner }: { agentId: string; owner: string }
               }`}
             >
               {loading ? <Loader2 className="animate-spin" size={14} /> : <Send size={14} />}
-              {loading ? "Verifying..." : "Execute"}
+              {loading ? (status || "Verifying...") : "Execute"}
             </button>
           </div>
           {!isOwner && (
@@ -111,6 +143,12 @@ export function TaskPanel({ agentId, owner }: { agentId: string; owner: string }
             </div>
           )}
         </div>
+        {isProving && (
+          <div className="mt-3 p-3 rounded-xl bg-brand-cyan/5 border border-brand-cyan/20 flex items-center gap-3">
+            <Loader2 className="animate-spin text-brand-cyan shrink-0" size={14} />
+            <p className="text-[11px] text-brand-cyan font-mono">{status || 'ZK proof running in background...'}</p>
+          </div>
+        )}
       </section>
 
       <section className="flex-1 min-h-0 flex flex-col overflow-hidden">

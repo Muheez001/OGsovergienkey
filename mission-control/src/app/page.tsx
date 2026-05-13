@@ -56,9 +56,26 @@ export default function MissionControl() {
   const [isLoadingAgents, setIsLoadingAgents] = useState(true);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [runtimeLogs, setRuntimeLogs] = useState<string[]>([]);
+  const [isMounted, setIsMounted] = useState(false);
+
+  // Wait for client-side hydration before reading wagmi state
+  useEffect(() => { setIsMounted(true); }, []);
 
   const vantaRef = useRef<HTMLDivElement>(null);
   const vantaEffect = useRef<any>(null);
+  const [lowPowerMode, setLowPowerMode] = useState<boolean>(false);
+
+  // Load low power mode preference
+  useEffect(() => {
+    const saved = localStorage.getItem("SAK_LOW_POWER");
+    if (saved === "true") setLowPowerMode(true);
+  }, []);
+
+  const toggleLowPower = () => {
+    const newVal = !lowPowerMode;
+    setLowPowerMode(newVal);
+    localStorage.setItem("SAK_LOW_POWER", String(newVal));
+  };
 
   // ─── VANTA WAVES CONFIG ─── (loads via CDN to avoid webpack UMD issues) ───
   useEffect(() => {
@@ -81,7 +98,7 @@ export default function MissionControl() {
     }
 
     async function initVanta() {
-      if (vantaEffect.current || !vantaRef.current) return;
+      if (vantaEffect.current || !vantaRef.current || lowPowerMode) return;
 
       try {
         // Load THREE.js from CDN first — Vanta needs window.THREE to exist
@@ -120,6 +137,15 @@ export default function MissionControl() {
 
     initVanta();
 
+    if (lowPowerMode) {
+        if (vantaEffect.current) {
+            vantaEffect.current.destroy();
+            vantaEffect.current = null;
+        }
+    } else {
+        initVanta();
+    }
+
     return () => {
       cancelled = true;
       if (vantaEffect.current) {
@@ -127,7 +153,7 @@ export default function MissionControl() {
         vantaEffect.current = null;
       }
     };
-  }, []);
+  }, [lowPowerMode]);
 
   // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
@@ -157,6 +183,8 @@ export default function MissionControl() {
       const data = await res.json();
       if (data.success) {
         setAgents(data.agents);
+      } else {
+        console.warn("Failed to refresh active fleet:", data.message);
       }
     } catch (e) {
       console.error("Failed to fetch agents:", e);
@@ -183,58 +211,74 @@ export default function MissionControl() {
   }, []);
 
   const handleSpawn = async () => {
-    if (!isConnected) {
-        setSpawnError("Please connect your wallet first to spawn an agent.");
-        return;
-    }
+    // Spawning uses the server-side PRIVATE_KEY from .env — no browser wallet needed.
     setSpawnError(null);
     setIsSpawning(true);
-    setRuntimeLogs(["Initializing Peer-to-Peer Orchestrator...", "Contacting 0G Galileo Testnet..."]);
-    toast.info("Initializing Agent Genesis Sequence...");
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 600000); // 10 minute UI timeout for complex ZK circuits
+    setRuntimeLogs(["[SAK] Initializing Agent Genesis Sequence...", "[SAK] Contacting 0G Galileo Testnet..."]);
+    toast.info("ZK Genesis dispatched! Proving in background (~60s)...");
 
     try {
       const response = await fetch("/api/spawn-agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        signal: controller.signal,
         body: JSON.stringify({
           name: `SAK-Agent-${Math.floor(Math.random() * 9999)}`,
         }),
       });
-      clearTimeout(timeoutId);
 
       const data = await response.json();
 
       if (!data.success) {
         setRuntimeLogs(prev => [...prev, `❌ ERROR: ${data.message}`]);
         toast.error(`Spawn failed: ${data.message}`);
-        throw new Error(data.message || "Spawn failed");
+        setSpawnError(data.message || "Spawn failed");
+        setIsSpawning(false);
+        return;
       }
 
-      toast.success(`Agent ${data.name} successfully spawned and anchored on-chain!`);
+      // API returned instantly (fire-and-forget) — the ZK proof is running in the background.
+      // Poll /api/get-agents every 10s until a new agent appears (up to 2 minutes).
+      const prevCount = agents.length;
+      setRuntimeLogs(prev => [...prev,
+        `[SAK] Agent genesis dispatched: ${data.name}`,
+        "[ZK] Generating Groth16 witness...",
+        "[ZK] Running snarkjs fullProve (this takes ~30-60s)...",
+        "[0G] Waiting for on-chain settlement...",
+      ]);
 
-      const logs = data.logs ? data.logs.split("\n").filter((l: string) => l.trim().length > 0) : [];
-      setRuntimeLogs(prev => [...prev, ...logs, "✅ E2E Cycle Finalized."]);
+      let attempts = 0;
+      const maxAttempts = 12; // 12 * 10s = 2 minutes
+      const poll = setInterval(async () => {
+        attempts++;
+        const res = await fetch("/api/get-agents");
+        const pollData = await res.json();
+        if (pollData.success && pollData.agents.length > prevCount) {
+          clearInterval(poll);
+          setIsSpawning(false);
+          setAgents(pollData.agents);
+          setCurrentPage(1);
+          await fetchNetworkStatus();
+          const newAgent = pollData.agents[0];
+          setRuntimeLogs(prev => [...prev,
+            `✅ Agent ${newAgent?.name ?? data.name} anchored on-chain!`,
+            `🔗 TX: ${newAgent?.txHash ?? "confirmed"}`,
+            "✅ E2E ZK Genesis Cycle Finalized.",
+          ]);
+          toast.success(`${newAgent?.name ?? data.name} is live on 0G Galileo!`);
+        } else if (attempts >= maxAttempts) {
+          clearInterval(poll);
+          setIsSpawning(false);
+          setRuntimeLogs(prev => [...prev, "⚠️ Proof still processing — refresh fleet to see new agent."]);
+          toast.info("ZK proving may still be running. Refresh the fleet in a moment.");
+        } else {
+          setRuntimeLogs(prev => [...prev, `[ZK] Still proving... (${attempts * 10}s elapsed)`]);
+        }
+      }, 10000);
 
-      if (data.provingTime !== "N/A") {
-        setLastProvingTime(data.provingTime);
-      }
-
-      fetchAgents();
-      fetchNetworkStatus(); 
     } catch (error: any) {
-      if (error.name === 'AbortError') {
-        setSpawnError("ZK Proving taking longer than 10 minutes. The agent creation is likely still processing on the server—please refresh in a moment.");
-      } else {
-        const err = error as Error;
-        console.error("Spawn failed:", err);
-        setSpawnError(err.message || "Spawn failed — check terminal logs for details.");
-        toast.error(err.message || "Spawn failed");
-      }
-    } finally {
+      console.error("Spawn failed:", error);
+      setSpawnError(error.message || "Spawn failed — check terminal logs for details.");
+      toast.error(error.message || "Spawn failed");
       setIsSpawning(false);
     }
   };
@@ -279,6 +323,19 @@ export default function MissionControl() {
             </p>
           </div>
           <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
+            <button
+                onClick={toggleLowPower}
+                className={cn(
+                    "px-4 py-4 rounded-xl flex items-center gap-2 transition-all border text-[10px] font-bold uppercase tracking-widest",
+                    lowPowerMode 
+                        ? "bg-brand-purple/20 border-brand-purple/40 text-brand-purple" 
+                        : "bg-white/5 border-white/10 text-white/40 hover:text-white"
+                )}
+                title={lowPowerMode ? "Enable High Performance UI (WebGL)" : "Disable GPU-Heavy Background"}
+            >
+                <Cpu size={14} className={lowPowerMode ? "" : "animate-pulse"} />
+                {lowPowerMode ? "Low Power: ON" : "Low Power: OFF"}
+            </button>
             <ConnectButtonCustom />
             <motion.button
               disabled={isSpawning}

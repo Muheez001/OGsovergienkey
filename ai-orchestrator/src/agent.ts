@@ -51,7 +51,8 @@ export class SovereignAgent {
         // Default rules: Limit 1000, Whitelist address provided
         const { pA, pB, pC, pubSignals } = await generateProof(
             0, // Initial balance 0
-            "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", 
+            "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
+            1, // assetId
             1000, 
             "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
         );
@@ -138,7 +139,8 @@ export class SovereignAgent {
         const provingStart = Date.now();
         const { pA, pB, pC, pubSignals } = await generateProof(
             amount, 
-            targetAddress, 
+            targetAddress,
+            1, // assetId
             1000, 
             targetAddress
         );
@@ -174,14 +176,15 @@ export class SovereignAgent {
         // 2. Generate ZK Proof
         const { pA, pB, pC, pubSignals } = await generateProof(
             amount, 
-            targetAddress, 
+            targetAddress,
+            1, // assetId
             1000, 
             targetAddress
         );
 
         // 3. Encode proof as bytes for the contract
         const proof = ethers.AbiCoder.defaultAbiCoder().encode(
-            ["uint[2]", "uint[2][2]", "uint[2]", "uint[4]"],
+            ["uint[2]", "uint[2][2]", "uint[2]", "uint[3]"],
             [pA, pB, pC, pubSignals]
         );
 
@@ -240,7 +243,7 @@ async function run() {
     const isSpawnOnly = process.argv.includes("--spawn-only");
     
     // Test parameters
-    const name = `Bot-${Math.floor(Math.random() * 1000)}`;
+    const name = process.argv[2] || `Bot-${Math.floor(Math.random() * 1000)}`;
     const target = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"; 
     const reportPath = path.join(__dirname, "../../report.md");
     
