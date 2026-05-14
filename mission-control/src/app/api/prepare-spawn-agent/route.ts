@@ -51,12 +51,46 @@ export async function POST(request: Request) {
       throw new Error("Failed to generate transaction payload.");
     }
 
+    const rootHash = rootHashMatch ? rootHashMatch[1] : "N/A";
     const payload = JSON.parse(payloadMatch[1]);
+
+    // Persist custom name and proving stats locally
+    try {
+        const metaDir = path.resolve(process.cwd(), "src", "metadata");
+        if (!fs.existsSync(metaDir)) fs.mkdirSync(metaDir, { recursive: true });
+        const metaPath = path.join(metaDir, "registry.json");
+        let registry: { rootHashes: Record<string, { name: string }>, provingHistory: number[] } = { rootHashes: {}, provingHistory: [] };
+        
+        if (fs.existsSync(metaPath)) {
+            const content = JSON.parse(fs.readFileSync(metaPath, "utf8"));
+            // Handle migration from old format if needed
+            if (content.rootHashes) {
+                registry = content;
+            } else {
+                registry.rootHashes = content;
+            }
+        }
+        
+        registry.rootHashes[rootHash] = { name };
+        
+        // Add duration to history (last 10 proofs)
+        const durNum = parseFloat(duration);
+        if (!isNaN(durNum)) {
+            registry.provingHistory.push(durNum);
+            if (registry.provingHistory.length > 10) registry.provingHistory.shift();
+        }
+        
+        fs.writeFileSync(metaPath, JSON.stringify(registry, null, 2));
+        console.log(`[API] Persisted metadata and stats for ${name}. Duration: ${duration}s`);
+    } catch (e) {
+        console.error("[API] Failed to persist agent metadata:", e);
+    }
 
     return NextResponse.json({
       success: true,
       name: name,
-      rootHash: rootHashMatch ? rootHashMatch[1] : "N/A",
+      rootHash: rootHash,
+      duration: parseFloat(duration),
       txPayload: payload,
       logs: stdout,
       message: "Transaction payload prepared successfully. Please sign via your wallet.",

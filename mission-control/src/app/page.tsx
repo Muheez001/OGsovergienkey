@@ -44,7 +44,13 @@ interface NetworkStatus {
     totalAgents: number;
     rpcStatus: string;
     indexerUrl: string;
-  }
+  };
+  zkStats?: {
+    lastProvingTime: number;
+    avgProvingTime: number;
+    status: string;
+    history: number[];
+  };
 }
 
 import { ConnectButtonCustom } from "@/components/ConnectButton";
@@ -58,6 +64,8 @@ export default function MissionControl() {
   const { sendTransactionAsync } = useSendTransaction();
 
   const [isSpawning, setIsSpawning] = useState(false);
+  const [isNamingModalOpen, setIsNamingModalOpen] = useState(false);
+  const [tempAgentName, setTempAgentName] = useState("");
   const [agents, setAgents] = useState<Agent[]>([]);
   const [isLoadingAgents, setIsLoadingAgents] = useState(true);
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
@@ -187,6 +195,7 @@ export default function MissionControl() {
     try {
       const res = await fetch("/api/get-agents");
       const data = await res.json();
+      if (data.duration) setLastProvingTime(`${data.duration}s`);
       if (data.success) {
         setAgents(data.agents);
       } else {
@@ -216,12 +225,12 @@ export default function MissionControl() {
     return () => clearInterval(interval);
   }, []);
 
-  const handleSpawn = async () => {
-    // Spawning uses the server-side PRIVATE_KEY from .env — no browser wallet needed.
+  const handleSpawn = async (name: string) => {
+    const finalName = name.trim() || `SAK-Agent-${Math.floor(Math.random() * 10000)}`;
     setSpawnError(null);
     setIsSpawning(true);
-    setRuntimeLogs(["[SAK] Initializing Agent Genesis Sequence...", "[SAK] Contacting 0G Galileo Testnet..."]);
-    toast.info("ZK Genesis dispatched! Proving in background (~60s)...");
+    setRuntimeLogs(["[SAK] Initializing Agent Genesis Sequence...", `[SAK] Identity: ${finalName}`, "[SAK] Contacting 0G Galileo Testnet..."]);
+    toast.info(`ZK Genesis for ${finalName} dispatched!`);
 
     try {
       if (!isConnected) {
@@ -250,18 +259,19 @@ export default function MissionControl() {
         }
       }, 4000);
 
-      const response = await fetch("/api/prepare-spawn-agent", {
+      const res = await fetch("/api/prepare-spawn-agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          name: `SAK-Agent-${Math.floor(Math.random() * 9999)}`,
-          address: connectedAddress,
-        }),
+        body: JSON.stringify({ 
+            name: finalName, 
+            address: connectedAddress 
+        })
       });
 
       clearInterval(progressInterval);
 
-      const data = await response.json();
+      const data = await res.json();
+      if (data.duration) setLastProvingTime(`${data.duration}s`);
 
       if (!data.success) {
         setRuntimeLogs(prev => [...prev, `❌ ERROR: ${data.message}`]);
@@ -374,14 +384,13 @@ export default function MissionControl() {
             </button>
             <ConnectButtonCustom />
             <motion.button
-              disabled={isSpawning}
-              onClick={handleSpawn}
-              whileHover={isSpawning ? {} : {
+              whileHover={isSpawning ? {} : { 
                 scale: 1.05,
                 boxShadow: "0 0 25px rgba(0, 255, 209, 0.4), 0 0 60px rgba(0, 255, 209, 0.15)",
                 borderColor: "rgba(0, 255, 209, 0.5)",
               }}
               whileTap={isSpawning ? {} : { scale: 0.97 }}
+              onClick={() => !isSpawning && setIsNamingModalOpen(true)}
               transition={{ type: "spring", stiffness: 400, damping: 20 }}
               className={cn(
                 "px-8 py-4 rounded-xl flex items-center gap-3 transition-all font-bold text-sm uppercase tracking-[0.2em] border border-white/10",
@@ -427,10 +436,10 @@ export default function MissionControl() {
           />
           <StatsCard
             title="ZK Proving Stats"
-            value={lastProvingTime}
-            label="Duration"
+            value={networkData?.zkStats?.lastProvingTime ? `${networkData.zkStats.lastProvingTime}s` : lastProvingTime}
+            label="Last Proof"
             icon={<Cpu size={20} />}
-            trend="Groth16 (snarkjs / circom 2.0)"
+            trend={networkData?.zkStats?.status || "Groth16 (snarkjs)"} trendColor={!networkData?.zkStats?.lastProvingTime ? "text-brand-cyan/80" : networkData.zkStats.lastProvingTime < 45 ? "text-green-400" : networkData.zkStats.lastProvingTime < 90 ? "text-yellow-400" : "text-red-400"} history={networkData?.zkStats?.history}
             status={isSpawning ? "loading" : "online"}
           />
           <StatsCard
@@ -532,12 +541,80 @@ export default function MissionControl() {
 
         </div>
       </div>
+
       {/* Agent Detail Modal */}
-      <AgentDetailModal
-        agent={selectedAgent}
-        onClose={() => setSelectedAgent(null)}
+      <AgentDetailModal 
+        agent={selectedAgent} 
+        onClose={() => setSelectedAgent(null)} 
       />
+
+      {/* Naming Modal */}
+      <AnimatePresence>
+        {isNamingModalOpen && (
+          <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsNamingModalOpen(false)}
+              className="absolute inset-0 bg-black/60 backdrop-blur-md"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 20 }}
+              className="relative w-full max-w-md bg-[#0d0f14] border border-white/10 rounded-[32px] p-8 shadow-2xl"
+            >
+              <div className="flex items-center gap-4 mb-6">
+                <div className="w-12 h-12 rounded-2xl bg-brand-cyan/10 flex items-center justify-center border border-brand-cyan/20">
+                  <Cpu className="text-brand-cyan w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white font-display">Name Your Agent</h3>
+                  <p className="text-xs text-white/40">Define your agent's identity.</p>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-white/30 tracking-widest mb-2 px-1">Agent Designation</label>
+                  <input 
+                    autoFocus
+                    type="text" 
+                    placeholder="e.g. PR1M3-Trader"
+                    value={tempAgentName}
+                    onChange={(e) => setTempAgentName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && tempAgentName.trim()) {
+                          setIsNamingModalOpen(false);
+                          handleSpawn(tempAgentName);
+                      }
+                    }}
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white placeholder:text-white/10 focus:outline-none focus:border-brand-cyan/50 focus:bg-white/[0.07] transition-all"
+                  />
+                </div>
+                
+                <button
+                  onClick={() => {
+                      setIsNamingModalOpen(false);
+                      handleSpawn(tempAgentName);
+                  }}
+                  disabled={!tempAgentName.trim()}
+                  className="w-full py-4 rounded-2xl bg-brand-cyan text-black font-bold uppercase tracking-widest text-xs disabled:opacity-30 disabled:cursor-not-allowed hover:bg-brand-cyan/90 transition-all shadow-lg shadow-brand-cyan/10"
+                >
+                  Initiate Genesis
+                </button>
+                <button
+                  onClick={() => setIsNamingModalOpen(false)}
+                  className="w-full py-4 rounded-2xl bg-white/5 text-white/40 font-bold uppercase tracking-widest text-xs hover:bg-white/10 transition-all"
+                >
+                  Cancel
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </main>
   );
 }
-

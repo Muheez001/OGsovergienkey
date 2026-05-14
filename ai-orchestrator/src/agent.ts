@@ -199,26 +199,41 @@ export class SovereignAgent {
         console.log(`\n>> [TASK] Agent ${agentId} executing task: ${instruction}`);
         
         // 1. Parse task
-        const { amount, targetAddress } = parseTask(instruction);
+        const { amount, targetAddress, isTransfer } = parseTask(instruction);
+        
+        if (isTransfer && !targetAddress) {
+            throw new Error("Execution failed: Target address not found in instruction.");
+        }
+
+        const finalTarget = targetAddress || "0x0000000000000000000000000000000000000000";
 
         // 2. Generate ZK Proof
         const { pA, pB, pC, pubSignals } = await generateProof(
             amount, 
-            targetAddress,
-            1, // assetId
-            1000, 
-            targetAddress
+            finalTarget,
+            1000, // maxSpendLimit
+            finalTarget // whitelistedAddress
         );
 
         // 3. Encode proof as bytes for the contract
         const proof = ethers.AbiCoder.defaultAbiCoder().encode(
-            ["uint[2]", "uint[2][2]", "uint[2]", "uint[3]"],
+            ["uint[2]", "uint[2][2]", "uint[2]", "uint[4]"],
             [pA, pB, pC, pubSignals]
         );
 
-        // 4. Submit to on-chain executeTask
+        // 4. Submit or Prepare
+        if (process.argv.includes("--prepare-only")) {
+            const txData = this.registry.interface.encodeFunctionData("executeTask", [agentId, instruction, result, proof]);
+            console.log(`\nPREPARE_PAYLOAD: ${JSON.stringify({
+                to: await this.registry.getAddress(),
+                data: txData,
+                value: "0"
+            })}`);
+            return;
+        }
+
         console.log(`[Settlement] Calling AgentRegistry.executeTask...`);
-        const tx = await this.registry.executeTask(agentId, instruction, result, proof);
+        const tx = await this.registry.connect(this.wallet).getFunction("executeTask")(agentId, instruction, result, proof);
         const receipt = await this.waitForReceipt(tx);
 
         console.log(`✅ Task recorded on-chain! TX: ${receipt.hash}`);
