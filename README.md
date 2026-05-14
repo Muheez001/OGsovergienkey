@@ -113,7 +113,7 @@ Today's AI agents are powerful but **custodial**. Their keys are held by platfor
 
 ## Deployed Contracts
 
-> **Network**: 0G Galileo Testnet (Chain ID `16602`)
+### 0G Galileo Testnet (Chain ID `16602`)
 
 | Contract | Address | Explorer |
 |---|---|---|
@@ -121,14 +121,37 @@ Today's AI agents are powerful but **custodial**. Their keys are held by platfor
 | **Verifier (Groth16)** | `0xdBE4c770673c4B86d27c2a1906d702027F4831c9` | [View ↗](https://scan-testnet.0g.ai/address/0xdBE4c770673c4B86d27c2a1906d702027F4831c9) |
 | **MockZKVerifier** | `0xa64e0aD0b07Dcf180C33232322054A6802037DBD` | [View ↗](https://scan-testnet.0g.ai/address/0xa64e0aD0b07Dcf180C33232322054A6802037DBD) |
 
+### 0G Mainnet (Chain ID `16661`)
+
+| Detail | Value |
+|---|---|
+| **RPC** | `https://evmrpc.0g.ai` |
+| **Chain ID** | `16661` |
+| **Explorer** | [https://chainscan.0g.ai](https://chainscan.0g.ai) |
+| **Currency** | 0G |
+
+| Contract | Address | Explorer |
+|---|---|---|
+| **AgentRegistry** | _Deployment pending — fund deployer wallet_ | — |
+| **Verifier (Groth16)** | _Deployment pending — fund deployer wallet_ | — |
+| **MockZKVerifier** | _Deployment pending — fund deployer wallet_ | — |
+
+**Deploy to Mainnet:**
+```bash
+cd contracts
+npx hardhat run scripts/deploy.ts --network 0g-mainnet
+```
+
+> **Note**: The deployer wallet (`0x4D5D...F1b0`) must hold $0G on mainnet. Get tokens via a CEX withdrawal or bridge via [XSwap](https://xswap.link/bridge?toChain=16661).
+
 ---
 
 ## Quick Start
 
 ### Prerequisites
 - Node.js 18+
-- MetaMask or Rabby wallet with 0G Galileo Testnet configured
-- 0G Testnet tokens ([Faucet](https://faucet.0g.ai))
+- MetaMask or Rabby wallet configured for 0G
+- 0G tokens ([Testnet Faucet](https://faucet.0g.ai) · [Mainnet Bridge](https://xswap.link/bridge?toChain=16661))
 
 ### 1. Clone & Install
 
