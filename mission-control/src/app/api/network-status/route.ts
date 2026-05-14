@@ -26,17 +26,10 @@ export async function GET() {
     const registry = new ethers.Contract(addresses.AgentRegistry, registryAbi, provider);
 
     // 3. Fetch Data
-    const [balance, nextAgentId] = await Promise.all([
-        provider.getBalance(wallet.address),
-        registry.nextAgentId().catch(() => 0n)
-    ]);
+    const nextAgentId = await registry.nextAgentId().catch(() => 0n);
 
     return NextResponse.json({
       success: true,
-      wallet: {
-          address: wallet.address,
-          balance: ethers.formatEther(balance),
-      },
       network: {
           totalAgents: Number(nextAgentId) - 1,
           rpcStatus: "Healthy",

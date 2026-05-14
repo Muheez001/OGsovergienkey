@@ -15,7 +15,7 @@ import '@rainbow-me/rainbowkit/styles.css';
 
 // Define 0G Galileo Testnet
 const zeroG = {
-  id: 16600,
+  id: 16602,
   name: '0G Galileo',
   nativeCurrency: { name: '0G', symbol: 'A0G', decimals: 18 },
   rpcUrls: {

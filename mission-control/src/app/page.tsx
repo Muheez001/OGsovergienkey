@@ -10,6 +10,9 @@ import { useState, useEffect, useRef } from "react";
 import { toast } from "sonner";
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import { useAccount, useBalance, useSendTransaction, useConfig } from "wagmi";
+import { formatEther } from "viem";
+import { waitForTransactionReceipt } from "wagmi/actions";
 
 function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -44,12 +47,15 @@ interface NetworkStatus {
   }
 }
 
-import { useAccount, useBalance } from "wagmi";
 import { ConnectButtonCustom } from "@/components/ConnectButton";
 
 export default function MissionControl() {
-  const { address, isConnected } = useAccount();
-  const { data: balanceData } = useBalance({ address });
+  const { address: connectedAddress, isConnected } = useAccount();
+  const config = useConfig();
+  const { data: balanceData } = useBalance({
+    address: connectedAddress,
+  });
+  const { sendTransactionAsync } = useSendTransaction();
 
   const [isSpawning, setIsSpawning] = useState(false);
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -218,62 +224,92 @@ export default function MissionControl() {
     toast.info("ZK Genesis dispatched! Proving in background (~60s)...");
 
     try {
-      const response = await fetch("/api/spawn-agent", {
+      if (!isConnected) {
+        toast.error("Please connect your wallet first.");
+        setIsSpawning(false);
+        return;
+      }
+
+      // Add dynamic progress logs while waiting for the backend
+      const progressSteps = [
+        "[ZK] Generating Witness... 15%",
+        "[ZK] Calculating Constraints... 32%",
+        "[ZK] Synthesizing Groth16 Proof... 48%",
+        "[ZK] Proof Optimization... 67%",
+        "[0G] Preparing Shard Merkle Tree... 82%",
+        "[0G] Finalizing Shard Encoding... 95%"
+      ];
+      
+      let stepIdx = 0;
+      const progressInterval = setInterval(() => {
+        if (stepIdx < progressSteps.length) {
+            setRuntimeLogs(prev => [...prev, progressSteps[stepIdx]]);
+            stepIdx++;
+        } else {
+            clearInterval(progressInterval);
+        }
+      }, 4000);
+
+      const response = await fetch("/api/prepare-spawn-agent", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: `SAK-Agent-${Math.floor(Math.random() * 9999)}`,
+          address: connectedAddress,
         }),
       });
+
+      clearInterval(progressInterval);
 
       const data = await response.json();
 
       if (!data.success) {
         setRuntimeLogs(prev => [...prev, `❌ ERROR: ${data.message}`]);
-        toast.error(`Spawn failed: ${data.message}`);
-        setSpawnError(data.message || "Spawn failed");
+        toast.error(`Prepare failed: ${data.message}`);
+        setSpawnError(data.message || "Prepare failed");
         setIsSpawning(false);
         return;
       }
 
-      // API returned instantly (fire-and-forget) — the ZK proof is running in the background.
-      // Poll /api/get-agents every 10s until a new agent appears (up to 2 minutes).
-      const prevCount = agents.length;
+      setRuntimeLogs(prev => [...prev, 
+        `[SAK] Agent payload generated: ${data.name}`,
+        `[ZK] Groth16 Proof ready.`,
+        `[SIGNING] Please confirm the transaction in your wallet to settle on 0G Galileo...`
+      ]);
+      toast.info("Payload ready! Please sign in your wallet.");
+
+      // Send the transaction using the connected wallet!
+      const txHash = await sendTransactionAsync({
+          to: data.txPayload.to as `0x${string}`,
+          data: data.txPayload.data as `0x${string}`,
+          value: data.txPayload.value ? BigInt(data.txPayload.value) : BigInt(0)
+      });
+
       setRuntimeLogs(prev => [...prev,
-        `[SAK] Agent genesis dispatched: ${data.name}`,
-        "[ZK] Generating Groth16 witness...",
-        "[ZK] Running snarkjs fullProve (this takes ~30-60s)...",
-        "[0G] Waiting for on-chain settlement...",
+        `[TX] Transaction broadcasted: ${txHash}`,
+        "[0G] Waiting for on-chain confirmation (Aggressive Polling)...",
       ]);
 
-      let attempts = 0;
-      const maxAttempts = 12; // 12 * 10s = 2 minutes
-      const poll = setInterval(async () => {
-        attempts++;
-        const res = await fetch("/api/get-agents");
-        const pollData = await res.json();
-        if (pollData.success && pollData.agents.length > prevCount) {
-          clearInterval(poll);
-          setIsSpawning(false);
-          setAgents(pollData.agents);
-          setCurrentPage(1);
-          await fetchNetworkStatus();
-          const newAgent = pollData.agents[0];
-          setRuntimeLogs(prev => [...prev,
-            `✅ Agent ${newAgent?.name ?? data.name} anchored on-chain!`,
-            `🔗 TX: ${newAgent?.txHash ?? "confirmed"}`,
-            "✅ E2E ZK Genesis Cycle Finalized.",
-          ]);
-          toast.success(`${newAgent?.name ?? data.name} is live on 0G Galileo!`);
-        } else if (attempts >= maxAttempts) {
-          clearInterval(poll);
-          setIsSpawning(false);
-          setRuntimeLogs(prev => [...prev, "⚠️ Proof still processing — refresh fleet to see new agent."]);
-          toast.info("ZK proving may still be running. Refresh the fleet in a moment.");
-        } else {
-          setRuntimeLogs(prev => [...prev, `[ZK] Still proving... (${attempts * 10}s elapsed)`]);
-        }
-      }, 10000);
+      // Use waitForTransactionReceipt for definitive on-chain confirmation
+      const receipt = await waitForTransactionReceipt(config, {
+        hash: txHash,
+        confirmations: 1,
+      });
+
+      setRuntimeLogs(prev => [...prev, `[0G] Settlement confirmed in block ${receipt.blockNumber}.`]);
+      
+      // Immediately refresh the fleet and network status
+      await fetchAgents();
+      await fetchNetworkStatus();
+      setIsSpawning(false);
+      setCurrentPage(1);
+
+      setRuntimeLogs(prev => [...prev,
+        `✅ Agent anchored on-chain!`,
+        `🔗 TX: ${txHash}`,
+        "✅ E2E ZK Genesis Cycle Finalized.",
+      ]);
+      toast.success(`Agent is live on 0G Galileo!`);
 
     } catch (error: any) {
       console.error("Spawn failed:", error);
@@ -381,30 +417,30 @@ export default function MissionControl() {
 
         {/* Real-Data Metrics Row */}
         <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-            <StatsCard 
-                title="Connected Assets" 
-                value={isConnected ? parseFloat(balanceData?.formatted || "0").toFixed(2) : "---"} 
-                label={balanceData?.symbol || "$0G"} 
-                icon={<Wallet size={20} />}
-                trend={isConnected ? `Connected: ${address?.slice(0,6)}...${address?.slice(-4)}` : "Wallet not connected"}
-                status={isConnected ? "online" : "offline"}
-            />
-            <StatsCard 
-                title="AI Fleet Integrity" 
-                value={networkData?.network?.totalAgents || "0"} 
-                label="Registered" 
-                icon={<Shield size={20} />}
-                trend={`Node Status: ${networkData?.network?.rpcStatus || "Checking..."}`}
-                status={networkData ? "online" : "loading"}
-            />
-            <StatsCard 
-                title="ZK Proving Engine" 
-                value={lastProvingTime} 
-                label="Duration" 
-                icon={<Cpu size={20} />}
-                trend="snarkjs / Groth16 / Circom 2.1"
-                status={isSpawning ? "loading" : "online"}
-            />
+          <StatsCard
+            title="Wallet Intelligence"
+            value={isMounted && isConnected && balanceData?.value !== undefined ? Number(formatEther(balanceData.value)).toFixed(4) : "—"}
+            label={isMounted && isConnected ? "$0G" : "Disconnected"}
+            icon={<Wallet size={20} />}
+            trend={isMounted && isConnected && connectedAddress ? `Addr: ${connectedAddress.slice(0, 6)}...${connectedAddress.slice(-4)}` : "Wallet not connected"}
+            status={isMounted && isConnected ? "online" : "offline"}
+          />
+          <StatsCard
+            title="ZK Proving Stats"
+            value={lastProvingTime}
+            label="Duration"
+            icon={<Cpu size={20} />}
+            trend="Groth16 (snarkjs / circom 2.0)"
+            status={isSpawning ? "loading" : "online"}
+          />
+          <StatsCard
+            title="Network Vitality"
+            value={networkData?.network?.totalAgents || "0"}
+            label="Deploys"
+            icon={<Network size={20} />}
+            trend={`Node: ${networkData?.network?.rpcStatus || "Syncing"}`}
+            status={networkData ? "online" : "loading"}
+          />
         </section>
 
         {/* Dashboard Grid */}

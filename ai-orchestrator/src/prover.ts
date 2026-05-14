@@ -31,15 +31,19 @@ export async function generateProof(
     const zkeyPath = path.resolve(__dirname, "../../zk-engine/circuits/circuit_final.zkey");
 
     // 2. Prepare inputs (Convert addresses to BigInt field elements)
+    if (!targetAddress) throw new Error("targetAddress is required for ZK Proof");
+    if (!whitelistedAddress) throw new Error("whitelistedAddress is required for ZK Proof");
+
     const targetBigInt = BigInt(targetAddress.startsWith("0x") ? targetAddress : `0x${targetAddress}`);
     const whitelistBigInt = BigInt(whitelistedAddress.startsWith("0x") ? whitelistedAddress : `0x${whitelistedAddress}`);
 
     const input = {
-        intent_amount: intentAmount,
-        target_address: targetBigInt.toString(),
-        max_spend_limit: maxSpendLimit,
-        whitelisted_address: whitelistBigInt.toString()
+        max_spend_limit: maxSpendLimit || 0,
+        whitelisted_address: whitelistBigInt.toString(),
+        intent_amount: intentAmount || 0,
+        target_address: targetBigInt.toString()
     };
+    console.log(`[ZK-Prover] Mapped Inputs for Witness Gen:`, input);
 
     console.log(`[ZK-Prover] 🛡️ Initializing Groth16 Proof generation...`);
     console.log(`[ZK-Prover] Artifacts: \n - WASM: ${wasmPath} \n - ZKEY: ${zkeyPath}`);
@@ -51,7 +55,7 @@ export async function generateProof(
             pA: [1n, 2n],
             pB: [[1n, 2n], [3n, 4n]],
             pC: [1n, 2n],
-            pubSignals: [BigInt(intentAmount), targetBigInt, 1n, 1n]
+            pubSignals: [BigInt(intentAmount || 0), targetBigInt, 1n, 1n]
         };
     }
 
@@ -105,7 +109,7 @@ export async function generateProof(
             pA: [1n, 2n], 
             pB: [[1n, 2n], [3n, 4n]], 
             pC: [1n, 2n], 
-            pubSignals: [BigInt(intentAmount), targetBigInt, 1n, 1n]
+            pubSignals: [BigInt(intentAmount || 0), targetBigInt, 1n, 1n]
         };
     }
 }

@@ -176,3 +176,36 @@
 - **Status**: SUCCESS
 - **Execution**: Mock/Local ZK Proof generation succeeded and intent anchored on Galileo Testnet.
 ---
+### 🟢 Spawn Run: 2026-05-10T13:31:22.143Z
+- **Agent Name**: Bot-985
+- **Agent ID**: 5
+- **Status**: SUCCESS
+- **Execution**: Mock/Local ZK Proof generation succeeded and intent anchored on Galileo Testnet.
+---
+### 🔴 Spawn Run: 2026-05-13T22:09:19.541Z
+- **Agent Name**: Bot-134
+- **Status**: FAILED
+- **Error log**: `replacement fee too low (transaction="0x02f8b38240da81cf84ee6b280084ee6b280e8301eff2948359fbd8461d0cd14a39f728d7f1bbe585bf0dc980b8448a46889c8cea1ab42ebbd1a02ce34809098e0d6ce0848b111a9c194fc7e8573eada19e03813215a38fccf679f4637d93981f039c912b54ee89166afe10e4d0ba199d4ae7c080a0c7a0259ea1bd8ba0e002cf90e9f3ff32078bd53a59c90b6dc418f2b0f2617bbca064f7510da0f05b5e1a40ca236cbd812e6a844c08126f55e753825997711953c8", info={ "error": { "code": -32000, "message": "replacement transaction underpriced" } }, code=REPLACEMENT_UNDERPRICED, version=6.13.1)`
+---
+### 🟢 Spawn Run: 2026-05-13T22:16:22.414Z
+- **Agent Name**: Bot-158
+- **Agent ID**: 8
+- **Status**: SUCCESS
+- **Execution**: Mock/Local ZK Proof generation succeeded and intent anchored on Galileo Testnet.
+---
+### 🟢 Spawn Run: 2026-05-13T22:24:56.393Z
+- **Agent Name**: Bot-287
+- **Agent ID**: 9
+- **Status**: SUCCESS
+- **Execution**: Mock/Local ZK Proof generation succeeded and intent anchored on Galileo Testnet.
+---
+### 🔴 Spawn Run: 2026-05-14T06:54:25.890Z
+- **Agent Name**: SAK-Agent-2161
+- **Status**: FAILED
+- **Error log**: `whitelistedAddress.startsWith is not a function`
+---
+### 🔴 Spawn Run: 2026-05-14T07:36:36.441Z
+- **Agent Name**: TestAgent123
+- **Status**: FAILED
+- **Error log**: `Cannot convert 0x1c8f...a0b5 to a BigInt`
+---

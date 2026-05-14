@@ -22,11 +22,13 @@ export async function GET() {
     const registryAbi = JSON.parse(fs.readFileSync(registryArtifactPath, "utf8")).abi;
     const registry = new ethers.Contract(addresses.AgentRegistry, registryAbi, provider);
 
-    // Filter events by the owner (our wallet)
-    const filter = registry.filters.AgentRegistered(null, wallet.address);
-    // Scan from block 0 so ALL historically registered agents are always returned,
-    // regardless of when they were spawned (fixes agents disappearing on server restart).
-    const events = await registry.queryFilter(filter, 0);
+    // Scan from a recent block to avoid timing out on the 33M+ block Galileo Testnet.
+    // In a production app, this should be the block where AgentRegistry was deployed.
+    const DEPLOYMENT_BLOCK = 33200000; 
+    
+    // Scan ALL historically registered agents from the deployment block
+    const filter = registry.filters.AgentRegistered();
+    const events = await registry.queryFilter(filter, DEPLOYMENT_BLOCK);
 
     const agents = events.map(event => {
         // Event args: agentId, owner, pubKeyHash, constitutionHash

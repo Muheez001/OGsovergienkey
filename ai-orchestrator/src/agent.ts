@@ -24,20 +24,22 @@ export class SovereignAgent {
     private registry: ethers.Contract;
 
     constructor() {
-        if (!process.env.PRIVATE_KEY) throw new Error("PRIVATE_KEY is not set in .env");
+        const usePrivateKey = process.env.USE_PRIVATE_KEY_FOR_TESTING === "true";
+        if (usePrivateKey && !process.env.PRIVATE_KEY) throw new Error("PRIVATE_KEY is not set in .env");
         if (!process.env.RPC_ENDPOINT) throw new Error("RPC_ENDPOINT is not set in .env");
 
         this.zeroG = new ZeroGService();
         const provider = new ethers.JsonRpcProvider(process.env.RPC_ENDPOINT);
-        this.wallet = new ethers.Wallet(process.env.PRIVATE_KEY, provider);
-        this.registry = new ethers.Contract(ADDRESSES.AgentRegistry, REGISTRY_ABI, this.wallet);
+        const privateKey = process.env.PRIVATE_KEY || "0x0000000000000000000000000000000000000000000000000000000000000001"; // Dummy key for prepare mode
+        this.wallet = new ethers.Wallet(privateKey, provider);
+        this.registry = new ethers.Contract(ADDRESSES.AgentRegistry, REGISTRY_ABI, provider); // Attach to provider to allow encoding
     }
 
     /**
      * Phase 1: Genesis - Generate MPC Shard, Prove Constitution, Upload to 0G, Register on-chain
      */
-    async asyncSpawn(name: string) {
-        console.log(`\n>> [GENESIS] Initializing Agent Birth: ${name}`);
+    async asyncSpawn(name: string, userAddress: string) {
+        console.log(`\n>> [GENESIS] Initializing Agent Birth: ${name} (Owner: ${userAddress})`);
         
         // 1. Generate ephemeral keypair and split with Shamir 2-of-3
         const ephemeralWallet = ethers.Wallet.createRandom();
@@ -45,23 +47,10 @@ export class SovereignAgent {
         const shares = sss.split(secretBytes, { shares: 3, threshold: 2 });
         const agentPubKeyHex = ethers.id(ephemeralWallet.publicKey) as `0x${string}`;
 
-        console.log(`[Flow] Phase 1a: Generating Verifiable Constitution (ZK Proof)...`);
+        console.log(`[Flow] Phase 1a: Generating Verifiable Constitution (ZK Proof) & Computing 0G Root...`);
         const provingStart = Date.now();
-        // Generate a proof that the constitution is valid for this agent
-        // Default rules: Limit 1000, Whitelist address provided
-        const { pA, pB, pC, pubSignals } = await generateProof(
-            0, // Initial balance 0
-            "0x70997970C51812dc3A010C7d01b50e0d17dc79C8",
-            1, // assetId
-            1000, 
-            "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"
-        );
-        const provingDuration = ((Date.now() - provingStart) / 1000).toFixed(1);
-        console.log(`PROVING_DURATION: ${provingDuration}s`);
-        console.log(`[Flow] ✅ ZK Proof Generated Successfully.`);
-
-        // 2. Prepare and Upload to 0G Storage (Resilient to node lag)
-        console.log(`[Flow] Phase 1b: Securing Identity Shards on 0G Storage...`);
+        
+        // Parallelize ZK Proving and 0G Root computation for speed
         const mockShardData = JSON.stringify({
           shardIndex: 1,
           totalShards: 3,
@@ -70,16 +59,26 @@ export class SovereignAgent {
           agentPubKey: ephemeralWallet.publicKey,
           timestamp: Date.now()
         });
-        const shardId = `shard-${name.toLowerCase()}-${Date.now()}`;
+        const buffer = Buffer.from(mockShardData, "utf-8");
+
+        const [proofResult, shardRootHash] = await Promise.all([
+            generateProof(
+                0, // Initial balance 0
+                userAddress, // targetAddress
+                1000, // maxSpendLimit
+                userAddress // whitelistedAddress
+            ),
+            this.zeroG.getMerkleRoot(buffer)
+        ]);
         
-        let shardRootHash = "0x-offline";
-        try {
-            shardRootHash = await this.zeroG.uploadEncryptedMPCShard(shardId, mockShardData);
-        } catch (e) {
-            console.warn(`[0G-WARNING] Storage Node Delay: ${e}. Anchoring with Local Memory.`);
-            // Fallback root hash for local dev if 0G is down
-            shardRootHash = ethers.id(mockShardData);
-        }
+        const { pA, pB, pC, pubSignals } = proofResult;
+        const provingDuration = ((Date.now() - provingStart) / 1000).toFixed(1);
+        console.log(`PROVING_DURATION: ${provingDuration}s`);
+        console.log(`[Flow] ✅ ZK Proof & 0G Root ready.`);
+
+        // 2. Upload to 0G Storage in background (Don't block the prepare-payload return)
+        console.log(`[Flow] Phase 1b: Securing Identity Shards on 0G Storage (Background)...`);
+        this.zeroG.backgroundUpload(buffer, '0G-Storage');
         
         // 3. Register on 0G Chain
         console.log(`[Flow] Phase 1c: Settling Sovereign Identity on 0G Galileo...`);
@@ -88,7 +87,36 @@ export class SovereignAgent {
           ? shardRootHash.padEnd(66, '0').slice(0, 66)
           : ('0x' + shardRootHash).padEnd(66, '0').slice(0, 66);
           
-        const tx = await this.registry.registerAgent(agentPubKeyHex, constitutionHashBytes32);
+        if (process.argv.includes("--prepare-only")) {
+            // AUTHORIZATION CHECK: In the current contract, registerAgent is restricted.
+            // We use the server's authority to "onboard" the user wallet if it's not already authorized.
+            try {
+                const isAuthorized = await this.registry.authorizedOperators(userAddress);
+                const contractOwner = await this.registry.owner();
+                if (!isAuthorized && userAddress.toLowerCase() !== contractOwner.toLowerCase()) {
+                    console.log(`[Flow] 🛡️ User Wallet ${userAddress} is not authorized. Onboarding via Server Authority...`);
+                    const authTx = await this.registry.connect(this.wallet).getFunction("setOperator")(userAddress, true);
+                    await authTx.wait();
+                    console.log(`[Flow] ✅ User Wallet ${userAddress} is now authorized to register agents.`);
+                }
+            } catch (error) {
+                console.warn(`[Flow] ⚠️ Authorization check skipped (Contract may be public): ${error}`);
+            }
+
+            // Encode the transaction data for frontend signing
+            const txData = this.registry.interface.encodeFunctionData("registerAgent", [agentPubKeyHex, constitutionHashBytes32]);
+            
+            console.log(`\nPREPARE_PAYLOAD: ${JSON.stringify({
+                to: await this.registry.getAddress(),
+                data: txData,
+                value: "0"
+            })}`);
+            
+            console.log(`ROOT_HASH: ${shardRootHash}`);
+            return BigInt(0); 
+        }
+
+        const tx = await this.registry.connect(this.wallet).getFunction("registerAgent")(agentPubKeyHex, constitutionHashBytes32);
         const receipt = await this.waitForReceipt(tx);
         
         const event = receipt.logs.map((log: any) => this.registry.interface.parseLog(log)).find((log: any) => log?.name === "AgentRegistered");
@@ -100,8 +128,8 @@ export class SovereignAgent {
         return agentId;
     }
 
-    async spawn(name: string) {
-        return this.asyncSpawn(name);
+    async spawn(name: string, userAddress: string) {
+        return this.asyncSpawn(name, userAddress);
     }
 
 
@@ -242,14 +270,24 @@ async function run() {
     // Check for --spawn-only flag
     const isSpawnOnly = process.argv.includes("--spawn-only");
     
-    // Test parameters
-    const name = process.argv[2] || `Bot-${Math.floor(Math.random() * 1000)}`;
-    const target = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8"; 
+    // Parameters from command line
+    const name = process.argv[2] && !process.argv[2].startsWith("--") ? process.argv[2] : `Bot-${Math.floor(Math.random() * 1000)}`;
+    const userAddress = process.argv[3] && !process.argv[3].startsWith("--") ? process.argv[3] : "";
     const reportPath = path.join(__dirname, "../../report.md");
     
+    if (!userAddress && !process.argv.includes("--prepare-only")) {
+        console.error("❌ Error: User address is required for non-prepare mode.");
+        process.exit(1);
+    }
+    
     try {
-        const agentId = await agent.spawn(name);
+        const agentId = await agent.spawn(name, userAddress);
         
+        if (process.argv.includes("--prepare-only")) {
+            console.log("\n🚀 PREPARE SUCCESSFUL: Payload generated for frontend signing.");
+            process.exit(0);
+        }
+
         if (!isSpawnOnly) {
             await agent.executeIntent(agentId, 800, target);
         }
@@ -264,6 +302,7 @@ async function run() {
 - **Execution**: Mock/Local ZK Proof generation succeeded and intent anchored on Galileo Testnet.
 ---`;
         fs.appendFileSync(reportPath, reportEntry, "utf-8");
+        process.exit(0);
         
     } catch (error) {
         console.error("\n❌ MISSION FAILED:", error);

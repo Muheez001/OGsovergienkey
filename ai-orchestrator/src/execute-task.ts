@@ -8,7 +8,7 @@ async function main() {
     const agent = new SovereignAgent();
     
     const agentIdStr = process.argv[2];
-    const instruction = process.argv[3] || "Transfer 100 tokens to 0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
+    const instruction = process.argv[3] || "";
     
     if (!agentIdStr) {
         console.error("Usage: npx ts-node src/execute-task.ts <agentId> \"<instruction>\"");
