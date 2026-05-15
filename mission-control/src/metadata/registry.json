@@ -11,11 +11,27 @@
     },
     "0xb325d4993df22f36933b7452fee50dc41c44483101ecc0af3b3d37fb278a1f28": {
       "name": "yh"
+    },
+    "0x0c13cb37bc0197e46a0cafaa5166772fe32b5ad0464c10e01951170982a057eb": {
+      "name": "old"
+    },
+    "0xc35c4748b74ec21728b3e40cc8ecea8470180ff14387fc954681d37c342baef5": {
+      "name": "bhi"
+    },
+    "0x94b86318bc36a491c47e9e7b19944b7f342d20a2799918023df6242b05940821": {
+      "name": "kikk"
+    },
+    "0x8a1a1edeefe0f9085814c80623a177b0d5a0628d13f68acb5320836dbb137063": {
+      "name": "billy"
     }
   },
   "provingHistory": [
     10.5,
     8,
-    10.5
+    10.5,
+    13.8,
+    16.7,
+    12.2,
+    11.9
   ]
 }

@@ -1,15 +1,13 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
-import { ConnectWallet } from "@/components/ConnectWallet";
 import { Toaster } from "sonner";
+import { Web3Provider } from "@/components/Web3Provider";
 
 export const metadata: Metadata = {
   title: "Sovereign Agent Keys | Mission Control",
-  description: "0G Labs Hackathon Mission Control",
+  description: "Non-Custodial AI Agent Infrastructure on the 0G Network — powered by ZK-proofs and MPC key sharding.",
 };
-
-import { Web3Provider } from "@/components/Web3Provider";
 
 export default function RootLayout({
   children,
@@ -21,15 +19,35 @@ export default function RootLayout({
       <head>
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet" />
+        <link
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Syne:wght@400;600;700;800&display=swap"
+          rel="stylesheet"
+        />
       </head>
-      <body className="antialiased selection:bg-brand-purple/30">
+      <body
+        className="antialiased"
+        style={{
+          background: "#0A0A0F",
+          color: "rgba(255,255,255,0.9)",
+          fontFamily: "'Inter', -apple-system, sans-serif",
+          minHeight: "100vh",
+        }}
+      >
         <Web3Provider>
-          <div className="absolute top-6 right-8 z-50">
-            {/* Dave's ConnectWallet can go here if needed, but we have ConnectButtonCustom in page.tsx */}
-          </div>
           {children}
-          <Toaster theme="dark" position="bottom-right" richColors />
+          <Toaster
+            theme="dark"
+            position="bottom-right"
+            richColors
+            toastOptions={{
+              style: {
+                background: "rgba(16, 16, 26, 0.97)",
+                border: "1px solid rgba(139, 92, 246, 0.2)",
+                color: "rgba(255,255,255,0.9)",
+                backdropFilter: "blur(20px)",
+              },
+            }}
+          />
         </Web3Provider>
       </body>
     </html>
