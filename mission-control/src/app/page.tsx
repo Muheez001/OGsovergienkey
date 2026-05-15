@@ -138,7 +138,7 @@ export default function MissionControl() {
           minWidth: 200.00,
           scale: 1.00,
           scaleMobile: 1.00,
-          color: 0x0a0020,
+          color: 0xb0b,
           shininess: 150.00,
           waveHeight: 40.0,
           waveSpeed: 0.15,
@@ -339,10 +339,9 @@ export default function MissionControl() {
 
   return (
     <main ref={vantaRef} className="min-h-screen p-8 lg:p-24 relative overflow-hidden transition-colors duration-1000 z-0">
-      {/* Premium ambient glows */}
-      <div className="absolute top-[-15%] left-[-5%] w-[600px] h-[600px] rounded-full pointer-events-none -z-10" style={{ background: "radial-gradient(circle, rgba(0,245,212,0.06) 0%, transparent 70%)" }} />
-      <div className="absolute bottom-[-15%] right-[-5%] w-[600px] h-[600px] rounded-full pointer-events-none -z-10" style={{ background: "radial-gradient(circle, rgba(139,92,246,0.08) 0%, transparent 70%)" }} />
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[800px] h-[400px] rounded-full pointer-events-none -z-10" style={{ background: "radial-gradient(ellipse, rgba(0,0,0,0) 0%, rgba(10,10,15,0.8) 80%)" }} />
+      {/* Background ambient glows */}
+      <div className="absolute top-[-10%] left-[-10%] w-[500px] h-[500px] bg-brand-cyan/20 blur-[120px] rounded-full pointer-events-none -z-10" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-brand-purple/20 blur-[120px] rounded-full pointer-events-none -z-10" />
 
       {/* Digital Soul Grid Pattern */}
       <div className="absolute inset-0 z-0 opacity-[0.03] pointer-events-none"
@@ -358,8 +357,7 @@ export default function MissionControl() {
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-[10px] font-bold uppercase tracking-widest mb-4"
-              style={{ border: "1px solid rgba(0,245,212,0.25)", background: "rgba(0,245,212,0.06)", color: "#00F5D4" }}
+              className="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-brand-cyan/50 bg-brand-cyan/10 text-brand-cyan text-[10px] font-bold uppercase tracking-widest mb-4"
             >
               <Activity className="w-3 h-3" /> Network: 0G Galileo Testnet
             </motion.div>
@@ -373,11 +371,12 @@ export default function MissionControl() {
           <div className="flex flex-col md:flex-row items-center gap-4 w-full md:w-auto">
             <button
                 onClick={toggleLowPower}
-                className="px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all text-[10px] font-bold uppercase tracking-widest"
-                style={lowPowerMode 
-                    ? { background: "rgba(139,92,246,0.12)", border: "1px solid rgba(139,92,246,0.3)", color: "#A78BFA" } 
-                    : { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.35)" }
-                }
+                className={cn(
+                    "px-4 py-4 rounded-xl flex items-center gap-2 transition-all border text-[10px] font-bold uppercase tracking-widest",
+                    lowPowerMode 
+                        ? "bg-brand-purple/20 border-brand-purple/40 text-brand-purple" 
+                        : "bg-white/5 border-white/10 text-white/40 hover:text-white"
+                )}
                 title={lowPowerMode ? "Enable High Performance UI (WebGL)" : "Disable GPU-Heavy Background"}
             >
                 <Cpu size={14} className={lowPowerMode ? "" : "animate-pulse"} />
@@ -385,18 +384,20 @@ export default function MissionControl() {
             </button>
             <ConnectButtonCustom />
             <motion.button
-              whileHover={isSpawning ? {} : {
-                scale: 1.03,
-                boxShadow: "0 0 30px rgba(0,245,212,0.35), 0 0 80px rgba(0,245,212,0.12), inset 0 1px 0 rgba(255,255,255,0.15)",
+              whileHover={isSpawning ? {} : { 
+                scale: 1.05,
+                boxShadow: "0 0 25px rgba(0, 255, 209, 0.4), 0 0 60px rgba(0, 255, 209, 0.15)",
+                borderColor: "rgba(0, 255, 209, 0.5)",
               }}
               whileTap={isSpawning ? {} : { scale: 0.97 }}
               onClick={() => !isSpawning && setIsNamingModalOpen(true)}
               transition={{ type: "spring", stiffness: 400, damping: 20 }}
-              className="px-8 py-4 rounded-xl flex items-center gap-3 font-bold text-sm uppercase tracking-[0.18em] transition-all"
-              style={isSpawning
-                ? { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.3)", cursor: "not-allowed" }
-                : { background: "#00F5D4", border: "1px solid rgba(0,245,212,0.4)", color: "#000000", boxShadow: "0 4px 20px rgba(0,245,212,0.2)" }
-              }
+              className={cn(
+                "px-8 py-4 rounded-xl flex items-center gap-3 transition-all font-bold text-sm uppercase tracking-[0.2em] border border-white/10",
+                isSpawning 
+                  ? "bg-white/10 text-white/40 cursor-not-allowed" 
+                  : "bg-brand-cyan text-black hover:bg-brand-cyan/90"
+              )}
             >
               {isSpawning ? (
                 <>
@@ -507,11 +508,10 @@ export default function MissionControl() {
                     <button
                       key={i}
                       onClick={() => paginate(i + 1)}
-                      className="w-10 h-10 rounded-xl flex items-center justify-center transition-all text-sm font-semibold"
-                      style={currentPage === i + 1
-                        ? { background: "rgba(139,92,246,0.15)", border: "1px solid rgba(139,92,246,0.4)", color: "#A78BFA" }
-                        : { background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(255,255,255,0.35)" }
-                      }
+                      className={`w-10 h-10 rounded-xl flex items-center justify-center transition-all border ${currentPage === i + 1
+                        ? "bg-brand-purple/20 border-brand-purple text-brand-purple"
+                        : "bg-white/5 border-white/10 text-white/40 hover:text-white"
+                        }`}
                     >
                       {i + 1}
                     </button>
@@ -563,12 +563,11 @@ export default function MissionControl() {
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-md rounded-[28px] p-8"
-              style={{ background: "rgba(12,12,20,0.99)", border: "1px solid rgba(255,255,255,0.07)", boxShadow: "0 24px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(0,245,212,0.04) inset" }}
+              className="relative w-full max-w-md bg-[#0d0f14] border border-white/10 rounded-[32px] p-8 shadow-2xl"
             >
               <div className="flex items-center gap-4 mb-6">
-                <div className="w-12 h-12 rounded-2xl flex items-center justify-center" style={{ background: "rgba(0,245,212,0.08)", border: "1px solid rgba(0,245,212,0.18)" }}>
-                  <Cpu className="w-6 h-6" style={{ color: "#00F5D4" }} />
+                <div className="w-12 h-12 rounded-2xl bg-brand-cyan/10 flex items-center justify-center border border-brand-cyan/20">
+                  <Cpu className="text-brand-cyan w-6 h-6" />
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-white font-display">Name Your Agent</h3>
@@ -591,10 +590,7 @@ export default function MissionControl() {
                           handleSpawn(tempAgentName);
                       }
                     }}
-                    className="w-full rounded-2xl px-5 py-4 text-white placeholder:text-white/20 focus:outline-none transition-all"
-                    style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
-                    onFocus={e => { e.target.style.borderColor = "rgba(0,245,212,0.35)"; e.target.style.background = "rgba(0,245,212,0.03)"; }}
-                    onBlur={e => { e.target.style.borderColor = "rgba(255,255,255,0.08)"; e.target.style.background = "rgba(255,255,255,0.04)"; }}
+                    className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-white placeholder:text-white/10 focus:outline-none focus:border-brand-cyan/50 focus:bg-white/[0.07] transition-all"
                   />
                 </div>
                 
@@ -604,8 +600,7 @@ export default function MissionControl() {
                       handleSpawn(tempAgentName);
                   }}
                   disabled={!tempAgentName.trim()}
-                  className="w-full py-4 rounded-2xl font-bold uppercase tracking-widest text-xs transition-all disabled:opacity-30 disabled:cursor-not-allowed"
-                  style={{ background: "#00F5D4", color: "#000000", boxShadow: "0 4px 24px rgba(0,245,212,0.25)" }}
+                  className="w-full py-4 rounded-2xl bg-brand-cyan text-black font-bold uppercase tracking-widest text-xs disabled:opacity-30 disabled:cursor-not-allowed hover:bg-brand-cyan/90 transition-all shadow-lg shadow-brand-cyan/10"
                 >
                   Initiate Genesis
                 </button>
